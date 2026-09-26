@@ -85,54 +85,32 @@ Design Reference: stitch_minimalist_mobile_app_ui.zip (Luminous Clarity Design S
 4. Routing & Layout
 -------------------
 - File: mobile/src/app/_layout.tsx
-  * Configured root Stack layout for Expo Router.
+  * Registered `login` and `(tabs)` routes in root Stack navigator.
+  * Added useEffect to hide splash screen on mount.
 - File: mobile/src/app/index.tsx
-  * Redirects root route directly to /(tabs).
+  * Redirects root route to /login (entry point is now the Login screen).
 
+5. User Login Screen & Temporary Navigation (September 26, 2026)
+----------------------------------------------------------------
+Design Reference: Image provided by user (focusloop_login_illustration.png)
 
+- File: mobile/src/app/login.tsx  [NEW]
+  * Login screen built exactly matching the provided design mockup.
+  * Brand header: Infinity icon + "FOCUSLOOP" text in Primary Violet.
+  * Hero illustration: User's provided image (focusloop_login_illustration.png) displayed in a soft lavender card.
+  * Title: "Welcome Back! 👋"
+  * Subtitle: "Log in to continue your focus journey."
+  * Email or Username input field with mail icon.
+  * Password input field with lock icon and show/hide toggle (eye icon).
+  * Remember Me checkbox (toggleable, checked by default) + Forgot password? link.
+  * Log In button (Primary Violet, arrow icon) — uses temporary/mock navigation.
+    - Navigates to /(tabs) when both email and password fields are non-empty.
+    - No backend call, no credential verification (placeholder until backend is ready).
+  * OR divider row.
+  * Continue with Google button (white card, Google G icon) — also navigates to /(tabs).
+  * "Don't have an account? Sign Up" footer row.
+  * "✦ Better Focus  ✦ A Healthier You" bottom tagline.
 
-  ----my git ignore content----
-  # Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
-
-# dependencies
-node_modules/
-
-# Expo
-.expo/
-dist/
-web-build/
-expo-env.d.ts
-
-# Native
-.kotlin/
-*.orig.*
-*.jks
-*.p8
-*.p12
-*.key
-*.mobileprovision
-
-# Metro
-.metro-health-check*
-
-# debug
-npm-debug.*
-yarn-debug.*
-yarn-error.*
-
-# macOS
-.DS_Store
-*.pem
-
-# local env files
-.env*.local
-
-# typescript
-*.tsbuildinfo
-
-example
-
-# generated native folders
-/ios
-/android
+- File: mobile/assets/images/login_illustration.png  [NEW]
+  * Copied from stitch_minimalist_mobile_app_ui/focusloop_login_illustration.png (user-provided).
 
