@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+
+<html lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"/><meta content="mobile_tab" name="shell-type"/><link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><style>@layer base{html,body{width:100%;margin:0;padding:0;background-color:#fcf8ff;font-family:'Plus Jakarta Sans',sans-serif;-webkit-tap-highlight-color:transparent;}body{overscroll-behavior-y:none;}.pb-safe{padding-bottom:calc(env(safe-area-inset-bottom,0px) + 0.5rem);}.pt-safe{padding-top:env(safe-area-inset-top,0px);}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config = { darkMode: "class", theme: { extend: { colors: { "on-surface-variant": "#464555", "surface-container": "#f0ecfa", "error": "#ba1a1a", "on-secondary-fixed-variant": "#005236", "text-strong": "#111827", "on-background": "#1b1b24", "surface-container-low": "#f5f2ff", "outline": "#777587", "secondary": "#006c49", "primary-fixed-dim": "#c3c0ff", "on-tertiary-container": "#fffaf9", "surface-tint-mint": "#ECFDF5", "on-error-container": "#93000a", "surface-variant": "#e4e1ee", "surface": "#fcf8ff", "tertiary": "#815100", "primary": "#493ee5", "primary-container": "#635bff", "inverse-surface": "#302f39", "on-primary-fixed-variant": "#321ed2", "tertiary-fixed": "#ffddb8", "tertiary-fixed-dim": "#ffb95f", "error-container": "#ffdad6", "on-secondary": "#ffffff", "secondary-fixed": "#6ffbbe", "surface-tint": "#4c42e9", "neutral-canvas": "#F8FAFC", "surface-tint-blue": "#EDF5FF", "secondary-fixed-dim": "#4edea3", "surface-tint-violet": "#F2F0FF", "text-subtle": "#64748B", "on-tertiary": "#ffffff", "outline-variant": "#c7c4d8", "accent-coral": "#F43F5E", "neutral-card": "#FFFFFF", "surface-tint-rose": "#FFF0F0", "on-secondary-fixed": "#002113", "inverse-on-surface": "#f3effd", "on-secondary-container": "#00714d", "on-primary-container": "#fefaff", "inverse-primary": "#c3c0ff", "on-primary-fixed": "#0f0069", "accent-sky": "#38BDF8", "tertiary-container": "#a36700", "secondary-container": "#6cf8bb", "surface-tint-amber": "#FFFBEB", "surface-container-high": "#eae6f4", "surface-container-highest": "#e4e1ee", "surface-bright": "#fcf8ff", "text-muted": "#94A3B8", "accent-indigo": "#4F46E5", "on-error": "#ffffff", "background": "#fcf8ff", "on-tertiary-fixed": "#2a1700", "surface-container-lowest": "#ffffff", "surface-dim": "#dcd8e6", "neutral-border": "#EEF2F6", "primary-fixed": "#e2dfff", "on-surface": "#1b1b24", "on-primary": "#ffffff", "on-tertiary-fixed-variant": "#653e00" }, borderRadius: { "DEFAULT": "1rem", "lg": "2rem", "xl": "3rem", "full": "9999px" }, spacing: { "gutter-sm": "0.75rem", "space-xs": "0.25rem", "space-md": "1rem", "margin-sm": "1rem", "gutter": "1rem", "space-xl": "1.75rem", "space-sm": "0.5rem", "margin": "1.5rem", "space-lg": "1.25rem" }, fontFamily: { "label-lg": ["Plus Jakarta Sans"], "headline-xl": ["Plus Jakarta Sans"], "label-md": ["Plus Jakarta Sans"], "label-sm": ["Plus Jakarta Sans"], "headline-md": ["Plus Jakarta Sans"], "headline-lg": ["Plus Jakarta Sans"], "body-sm": ["Plus Jakarta Sans"], "display-lg-mobile": ["Plus Jakarta Sans"], "stat-metric": ["Plus Jakarta Sans"], "body-lg": ["Plus Jakarta Sans"], "display-lg": ["Plus Jakarta Sans"], "headline-xl-mobile": ["Plus Jakarta Sans"], "body-md": ["Plus Jakarta Sans"] }, fontSize: { "label-lg": ["14px", { lineHeight: "18px", letterSpacing: "0.01em", fontWeight: "600" }], "headline-xl": ["24px", { lineHeight: "32px", letterSpacing: "-0.02em", fontWeight: "700" }], "label-md": ["12px", { lineHeight: "16px", letterSpacing: "0.015em", fontWeight: "600" }], "label-sm": ["10px", { lineHeight: "14px", letterSpacing: "0.02em", fontWeight: "600" }], "headline-md": ["16px", { lineHeight: "22px", letterSpacing: "-0.005em", fontWeight: "600" }], "headline-lg": ["18px", { lineHeight: "24px", letterSpacing: "-0.01em", fontWeight: "600" }], "body-sm": ["11px", { lineHeight: "16px", letterSpacing: "0.01em", fontWeight: "400" }], "display-lg-mobile": ["28px", { lineHeight: "36px", letterSpacing: "-0.025em", fontWeight: "700" }], "stat-metric": ["32px", { lineHeight: "36px", letterSpacing: "-0.03em", fontWeight: "700" }], "body-lg": ["15px", { lineHeight: "22px", letterSpacing: "0em", fontWeight: "400" }], "display-lg": ["36px", { lineHeight: "44px", letterSpacing: "-0.03em", fontWeight: "700" }], "headline-xl-mobile": ["20px", { lineHeight: "28px", letterSpacing: "-0.015em", fontWeight: "700" }], "body-md": ["13px", { lineHeight: "18px", letterSpacing: "0.005em", fontWeight: "400" }] } } } };</script><style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+</head><body class="bg-surface text-on-surface flex flex-col min-h-screen antialiased select-none"><header class="fixed top-0 inset-x-0 z-50 bg-surface/80 backdrop-blur-xl pt-safe shadow-[0_1px_8px_rgba(0,0,0,0.03)]"><div class="h-16 px-margin flex items-center justify-between"><div class="flex items-center gap-space-sm"><img alt="Brand logo. - Primary color: #6366f1
+- Font: inter
+- Mode: dark
+- Roundness: rounded-md
+" class="h-8 w-auto object-contain" src="https://lh3.googleusercontent.com/aida/AEtjO1Xk7sAycrzfwamIbqHzlPPmxgJedV2xrLQ_w3IcsnxGhEL9M_CfoKSo2Xzc4mhUAWGUodLAqHTfHpDKo1HQ4Tii3_tjU3X2wD9Ye-OCAoHBd-sm5I8t9tRM837AhvwyJzGcEggadEhR7DVMoz8E6ZruiDsRQlhiRUb7zuFbhwevHxhGVVXLS_6fr1zY5itxt1Q_-h98PJHqI6vl-ZcsH5dhdh0mIe8kYkklAe0oaex6tM-gs_7ZluucSg"/><div class="flex flex-col"><span class="font-label-sm text-label-sm text-primary tracking-wider uppercase">FocusLoop</span><h1 class="font-headline-lg text-headline-lg text-text-strong leading-none">Insights</h1></div></div><div class="flex items-center gap-space-xs"><button class="w-11 h-11 flex items-center justify-center rounded-full text-on-surface-variant hover:text-primary hover:bg-surface-tint-violet transition-colors duration-200 active:scale-95"><span class="material-symbols-outlined text-[22px]">notifications</span></button><div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center shadow-[0_2px_8px_rgba(73,62,229,0.25)]"><span class="material-symbols-outlined text-on-primary text-[18px]">person</span></div></div></div></header><main class="flex flex-col relative w-full pt-16 pb-28 bg-surface min-h-screen"><div class="flex flex-col w-full px-margin-sm space-y-space-lg">
+<!-- TOP SEGMENTED SLIDING TOGGLE -->
+<div class="w-full bg-surface-container-high/60 p-1.5 rounded-full flex items-center shadow-[inset_0_1px_3px_rgba(0,0,0,0.02)]">
+<button class="flex-1 py-2 px-3 rounded-full text-center font-label-md text-label-md text-text-subtle transition-all duration-200 hover:text-text-strong active:scale-95">
+      Overview &amp; Trends
+    </button>
+<button class="flex-1 py-2 px-3 rounded-full text-center font-label-md text-label-md bg-primary text-on-primary shadow-[0_4px_12px_rgba(99,91,255,0.28)] transition-all duration-200">
+      Experiment Impact
+    </button>
+<button class="flex-1 py-2 px-3 rounded-full text-center font-label-md text-label-md text-text-subtle transition-all duration-200 hover:text-text-strong active:scale-95">
+      Peer Circles
+    </button>
+</div>
+<!-- SECTION 1: HERO & BEHAVIORAL INTERVENTION SUMMARY -->
+<div class="w-full bg-neutral-card rounded-2xl p-space-lg shadow-[0_4px_20px_-2px_rgba(100,116,139,0.06)] flex flex-col space-y-space-md">
+<!-- Header cluster with grade badge -->
+<div class="flex items-start justify-between">
+<div class="flex flex-col space-y-1">
+<div class="flex items-center gap-1.5">
+<span class="inline-flex w-2 h-2 rounded-full bg-primary animate-pulse"></span>
+<span class="font-label-sm text-label-sm text-primary uppercase tracking-wider">Intervention Impact</span>
+</div>
+<h2 class="font-headline-xl-mobile text-headline-xl-mobile text-text-strong">Behavioral Recovery</h2>
+</div>
+<div class="bg-surface-tint-violet px-3 py-1.5 rounded-full flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[16px] text-primary" style="font-variation-settings: 'FILL' 1;">verified</span>
+<span class="font-label-sm text-label-sm text-primary font-bold">Top 8% Active</span>
+</div>
+</div>
+<!-- Center Hero Badge: Grade & Score -->
+<div class="bg-gradient-to-br from-surface-tint-violet via-surface-container-low to-surface-tint-mint rounded-2xl p-space-md flex items-center justify-between">
+<div class="flex items-center gap-space-md">
+<div class="w-16 h-16 rounded-2xl bg-neutral-card flex flex-col items-center justify-center shadow-[0_4px_14px_rgba(73,62,229,0.12)]">
+<span class="font-stat-metric text-stat-metric text-primary leading-none">A</span>
+<span class="font-label-sm text-label-sm text-secondary font-bold -mt-0.5">Top Tier</span>
+</div>
+<div class="flex flex-col">
+<span class="font-label-md text-label-md text-text-subtle">Hesitation Defeated</span>
+<div class="flex items-baseline gap-1">
+<span class="font-display-lg-mobile text-display-lg-mobile text-text-strong font-bold">94</span>
+<span class="font-label-md text-label-md text-text-subtle">/ 100</span>
+</div>
+<span class="font-body-sm text-body-sm text-secondary font-medium flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">trending_up</span>
+            +18 pts vs 30-day baseline
+          </span>
+</div>
+</div>
+<div class="relative w-14 h-14 flex items-center justify-center">
+<!-- Circular Progress Ring (Score 94%) -->
+<svg class="w-14 h-14 -rotate-90" viewbox="0 0 48 48">
+<circle class="text-surface-container-highest" cx="24" cy="24" fill="transparent" r="19" stroke="currentColor" stroke-width="4"></circle>
+<circle class="text-primary" cx="24" cy="24" fill="transparent" r="19" stroke="currentColor" stroke-dasharray="119.38" stroke-dashoffset="7.16" stroke-linecap="round" stroke-width="4"></circle>
+</svg>
+<span class="absolute font-label-sm text-label-sm text-text-strong font-bold">94%</span>
+</div>
+</div>
+<!-- 3 Micro-Metrics Row -->
+<div class="grid grid-cols-3 gap-2">
+<!-- Metric 1 -->
+<div class="bg-surface-container-low rounded-xl p-2.5 flex flex-col justify-between">
+<div class="flex items-center justify-between text-secondary">
+<span class="material-symbols-outlined text-[18px]">speed</span>
+<span class="font-label-sm text-label-sm font-bold">-58%</span>
+</div>
+<div class="mt-2">
+<span class="block font-headline-md text-headline-md text-text-strong font-bold">16m</span>
+<span class="block font-body-sm text-body-sm text-text-subtle leading-tight">Latency (was 38m)</span>
+</div>
+</div>
+<!-- Metric 2 -->
+<div class="bg-surface-container-low rounded-xl p-2.5 flex flex-col justify-between">
+<div class="flex items-center justify-between text-primary">
+<span class="material-symbols-outlined text-[18px]">psychology</span>
+<span class="font-label-sm text-label-sm font-bold">4/4</span>
+</div>
+<div class="mt-2">
+<span class="block font-headline-md text-headline-md text-text-strong font-bold">4 Labs</span>
+<span class="block font-body-sm text-body-sm text-text-subtle leading-tight">Habits Adopted</span>
+</div>
+</div>
+<!-- Metric 3 -->
+<div class="bg-surface-container-low rounded-xl p-2.5 flex flex-col justify-between">
+<div class="flex items-center justify-between text-tertiary">
+<span class="material-symbols-outlined text-[18px]">hourglass_bottom</span>
+<span class="font-label-sm text-label-sm font-bold">Saved</span>
+</div>
+<div class="mt-2">
+<span class="block font-headline-md text-headline-md text-text-strong font-bold">14.2h</span>
+<span class="block font-body-sm text-body-sm text-text-subtle leading-tight">Friction Reclaimed</span>
+</div>
+</div>
+</div>
+</div>
+<!-- SECTION 2: EXPERIMENT PROTOCOLS IMPACT DECK -->
+<div class="w-full flex flex-col space-y-space-md">
+<div class="flex items-center justify-between px-1">
+<div class="flex flex-col">
+<h3 class="font-headline-lg text-headline-lg text-text-strong">Verified Experiments</h3>
+<span class="font-body-sm text-body-sm text-text-subtle">Targeted friction breakers tested in FocusLoop Lab</span>
+</div>
+<span class="font-label-sm text-label-sm bg-surface-container-high px-2 py-1 rounded-full text-on-surface-variant font-semibold">3 Active Logs</span>
+</div>
+<!-- Card 1: Active Winner -->
+<div class="w-full bg-neutral-card rounded-2xl p-space-md shadow-[0_4px_20px_-2px_rgba(100,116,139,0.06)] flex flex-col space-y-space-sm">
+<div class="flex items-start justify-between">
+<div class="flex items-center gap-space-sm">
+<div class="w-10 h-10 rounded-xl bg-surface-tint-violet flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-[22px]">timer</span>
+</div>
+<div class="flex flex-col">
+<h4 class="font-headline-md text-headline-md text-text-strong leading-tight">10-Min Micro-Start Buffer</h4>
+<span class="font-label-sm text-label-sm text-text-subtle">Protocol #04 • Cognitive Momentum</span>
+</div>
+</div>
+<div class="bg-surface-tint-mint px-2 py-1 rounded-full flex items-center gap-1">
+<span class="font-label-sm text-label-sm text-secondary font-bold">Grade A+</span>
+</div>
+</div>
+<!-- Comparison latency bar visual -->
+<div class="bg-surface-container-low rounded-xl p-space-sm space-y-2">
+<div class="flex justify-between items-center text-label-sm font-label-sm">
+<span class="text-text-subtle">Start Hesitation Reduction</span>
+<span class="text-secondary font-bold">+92% Efficacy</span>
+</div>
+<div class="space-y-1.5">
+<!-- Baseline track -->
+<div class="flex items-center gap-2">
+<span class="font-label-sm text-label-sm text-text-subtle w-16">Baseline</span>
+<div class="flex-1 bg-surface-container-highest h-3 rounded-full overflow-hidden flex">
+<div class="bg-outline-variant h-full w-[85%] rounded-full"></div>
+</div>
+<span class="font-label-sm text-label-sm text-text-subtle w-8 text-right font-medium">38m</span>
+</div>
+<!-- Actual with protocol -->
+<div class="flex items-center gap-2">
+<span class="font-label-sm text-label-sm text-primary font-bold w-16">Buffered</span>
+<div class="flex-1 bg-surface-container-highest h-3 rounded-full overflow-hidden flex">
+<div class="bg-primary h-full w-[28%] rounded-full shadow-[0_0_8px_rgba(99,91,255,0.4)]"></div>
+</div>
+<span class="font-label-sm text-label-sm text-primary font-bold w-8 text-right">12m</span>
+</div>
+</div>
+</div>
+<div class="flex items-start gap-2 bg-surface-tint-blue/60 p-2.5 rounded-xl">
+<span class="material-symbols-outlined text-[16px] text-accent-indigo mt-0.5" style="font-variation-settings: 'FILL' 1;">insights</span>
+<p class="font-body-sm text-body-sm text-text-strong leading-tight">
+          Reduced afternoon delay by <strong>68%</strong>. Initiated 11/12 high-difficulty tasks precisely on schedule.
+        </p>
+</div>
+<div class="flex items-center justify-between pt-1">
+<div class="flex items-center gap-1.5 text-secondary">
+<span class="material-symbols-outlined text-[16px]">check_circle</span>
+<span class="font-label-sm text-label-sm font-semibold">Succeeded &amp; Concluded</span>
+</div>
+<button class="font-label-sm text-label-sm text-primary font-semibold flex items-center gap-0.5 active:scale-95 transition-transform">
+          View Protocol Log
+          <span class="material-symbols-outlined text-[14px]">chevron_right</span>
+</button>
+</div>
+</div>
+<!-- Card 2: In-Progress Protocol -->
+<div class="w-full bg-neutral-card rounded-2xl p-space-md shadow-[0_4px_20px_-2px_rgba(100,116,139,0.06)] flex flex-col space-y-space-sm">
+<div class="flex items-start justify-between">
+<div class="flex items-center gap-space-sm">
+<div class="w-10 h-10 rounded-xl bg-surface-tint-rose flex items-center justify-center text-accent-coral">
+<span class="material-symbols-outlined text-[22px]">air</span>
+</div>
+<div class="flex flex-col">
+<h4 class="font-headline-md text-headline-md text-text-strong leading-tight">5-Min Box Breathing</h4>
+<span class="font-label-sm text-label-sm text-text-subtle">Protocol #02 • Somatic Down-Regulation</span>
+</div>
+</div>
+<div class="bg-surface-tint-amber px-2 py-1 rounded-full flex items-center gap-1">
+<span class="font-label-sm text-label-sm text-tertiary font-bold">Grade B+</span>
+</div>
+</div>
+<!-- Day progress tracker -->
+<div class="bg-surface-container-low rounded-xl p-space-sm flex items-center justify-between">
+<div class="flex flex-col">
+<span class="font-label-sm text-label-sm text-text-subtle">Testing Phase</span>
+<span class="font-headline-md text-headline-md text-text-strong">Day 5 of 7</span>
+</div>
+<div class="flex items-center gap-1">
+<span class="w-2.5 h-6 rounded-full bg-primary"></span>
+<span class="w-2.5 h-6 rounded-full bg-primary"></span>
+<span class="w-2.5 h-6 rounded-full bg-primary"></span>
+<span class="w-2.5 h-6 rounded-full bg-primary"></span>
+<span class="w-2.5 h-6 rounded-full bg-primary animate-pulse"></span>
+<span class="w-2.5 h-6 rounded-full bg-surface-container-highest"></span>
+<span class="w-2.5 h-6 rounded-full bg-surface-container-highest"></span>
+</div>
+</div>
+<p class="font-body-sm text-body-sm text-text-subtle leading-tight">
+        Task initiation stress down by 41%. Average delay shrank from 29m baseline to 19m.
+      </p>
+<div class="flex items-center justify-between pt-1">
+<span class="font-label-sm text-label-sm text-tertiary font-semibold flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]">flaky</span>
+          2 days remaining to certify
+        </span>
+<button class="font-label-sm text-label-sm text-primary font-semibold flex items-center gap-0.5 active:scale-95 transition-transform">
+          Log Session
+          <span class="material-symbols-outlined text-[14px]">add</span>
+</button>
+</div>
+</div>
+<!-- Card 3: Permanent Habit Protocol -->
+<div class="w-full bg-neutral-card rounded-2xl p-space-md shadow-[0_4px_20px_-2px_rgba(100,116,139,0.06)] flex items-center justify-between">
+<div class="flex items-center gap-space-sm">
+<div class="w-10 h-10 rounded-xl bg-surface-tint-mint flex items-center justify-center text-secondary">
+<span class="material-symbols-outlined text-[22px]">draw</span>
+</div>
+<div class="flex flex-col">
+<div class="flex items-center gap-1.5">
+<h4 class="font-headline-md text-headline-md text-text-strong leading-tight">2-Min Low-Stakes Drafting</h4>
+<span class="material-symbols-outlined text-[15px] text-secondary" style="font-variation-settings: 'FILL' 1;">lock</span>
+</div>
+<span class="font-body-sm text-body-sm text-text-subtle">Permanent Habit • 96% Routine Streak</span>
+</div>
+</div>
+<div class="flex flex-col items-end">
+<span class="font-label-md text-label-md text-secondary font-bold">Grade A</span>
+<span class="font-body-sm text-body-sm text-text-subtle">Protocol #01</span>
+</div>
+</div>
+</div>
+<!-- SECTION 3: BEHAVIORAL MASTERY GRADING TIERS -->
+<div class="w-full bg-neutral-card rounded-2xl p-space-lg shadow-[0_4px_20px_-2px_rgba(100,116,139,0.06)] flex flex-col space-y-space-md">
+<div class="flex items-center justify-between">
+<div class="flex flex-col">
+<span class="font-label-sm text-label-sm text-primary font-bold uppercase tracking-wider">Evolution Path</span>
+<h3 class="font-headline-lg text-headline-lg text-text-strong">Behavioral Mastery Tier</h3>
+</div>
+<div class="bg-surface-tint-violet px-3 py-1 rounded-full text-primary font-label-sm text-label-sm font-bold flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]">military_tech</span>
+        Flow Master II
+      </div>
+</div>
+<!-- Stepper progression bar -->
+<div class="w-full space-y-2">
+<div class="flex justify-between font-label-sm text-label-sm text-text-subtle">
+<span>Apprentice</span>
+<span>Loop Builder</span>
+<span class="text-primary font-semibold">Specialist</span>
+<span class="text-primary font-bold">Master II</span>
+</div>
+<div class="w-full bg-surface-container-high h-2.5 rounded-full overflow-hidden flex">
+<div class="bg-primary h-full w-[78%] rounded-full shadow-[0_0_10px_rgba(99,91,255,0.4)]"></div>
+</div>
+</div>
+<!-- Next unlock helper banner -->
+<div class="bg-surface-container-low rounded-xl p-space-sm flex items-center justify-between">
+<div class="flex items-center gap-2">
+<div class="w-8 h-8 rounded-full bg-surface-tint-violet flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-[18px]">key</span>
+</div>
+<div class="flex flex-col">
+<span class="font-label-md text-label-md text-text-strong">Next Grade Unlock</span>
+<span class="font-body-sm text-body-sm text-text-subtle">Complete 2 more experiments to reach Tier I Master</span>
+</div>
+</div>
+<button class="w-8 h-8 rounded-full bg-neutral-card flex items-center justify-center text-text-subtle shadow-sm active:scale-90 transition-transform">
+<span class="material-symbols-outlined text-[18px]">arrow_forward</span>
+</button>
+</div>
+</div>
+<!-- SECTION 4: FRIENDS & PEER CIRCLES LEADERBOARD -->
+<div class="w-full bg-neutral-card rounded-2xl p-space-lg shadow-[0_4px_20px_-2px_rgba(100,116,139,0.06)] flex flex-col space-y-space-md">
+<!-- Header cluster with social framing -->
+<div class="flex flex-col space-y-1">
+<div class="flex items-center justify-between">
+<h3 class="font-headline-lg text-headline-lg text-text-strong">Focus Circle Grades</h3>
+<span class="bg-surface-tint-mint px-2 py-0.5 rounded-full text-secondary font-label-sm text-label-sm font-bold">Active Circle</span>
+</div>
+<p class="font-body-sm text-body-sm text-text-subtle">
+        Zero toxic comparison. Grounded purely in friction reduction &amp; protocol consistency.
+      </p>
+</div>
+<!-- Peer Leaderboard List -->
+<div class="flex flex-col space-y-space-sm">
+<!-- Rank 1: You -->
+<div class="w-full bg-gradient-to-r from-surface-tint-violet/70 to-surface-container-low rounded-xl p-space-sm flex items-center justify-between shadow-sm">
+<div class="flex items-center gap-space-sm min-w-0">
+<div class="relative w-10 h-10 flex-shrink-0">
+<img class="w-10 h-10 rounded-full object-cover shadow-sm" data-alt="Warm natural portrait avatar of a friendly individual with soft natural lighting and warm neutral styling on a periwinkle backdrop." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDQqXHAAPA-klsOB1YbuF5qttmIhcjC1b6gwocETUaYtYqsOmy4T9pDJzQn1MZeuxF9b2UaR9AC77w0M85Nsa-owZ95gaMuWobX1NlurLtD8_BWc5ayyjeIVeS16TznUdgns591R-HGTsmee6ERR6bgAjA9SYKOwPDk7u4jdEwv4Amr7tz7BLlzSMn60EY9rDpOuONoaan0EN1X0ynDuONLabPe3GgYkhMWUgm7LhhKagVtaamIPyny"/>
+<span class="absolute -bottom-1 -right-1 w-4 h-4 bg-primary text-on-primary font-label-sm text-label-sm rounded-full flex items-center justify-center font-bold">1</span>
+</div>
+<div class="flex flex-col min-w-0">
+<div class="flex items-center gap-1.5">
+<span class="font-label-md text-label-md text-text-strong font-bold truncate">Alex Chen (You)</span>
+<span class="bg-primary text-on-primary font-label-sm text-label-sm px-1.5 py-0.2 rounded-full font-bold">A+</span>
+</div>
+<span class="font-body-sm text-body-sm text-text-subtle truncate">Micro-Start Buffer • 🔥 12-day streak</span>
+</div>
+</div>
+<div class="flex flex-col items-end flex-shrink-0 pl-2">
+<span class="font-headline-md text-headline-md text-primary font-bold">94 pts</span>
+<span class="font-label-sm text-label-sm text-secondary font-semibold">-58% delay</span>
+</div>
+</div>
+<!-- Rank 2: Maya Patel -->
+<div class="w-full bg-surface-container-low/60 rounded-xl p-space-sm flex items-center justify-between">
+<div class="flex items-center gap-space-sm min-w-0">
+<div class="relative w-10 h-10 flex-shrink-0">
+<img class="w-10 h-10 rounded-full object-cover" data-alt="Charming candid studio headshot of a smiling woman with glasses and pastel mint tones in the soft lighting." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCJn03G-NykpKGvUUkmJ5ui67_q2sEv7MY3a5-FCDAexm5j2wkNlpxirtuLIAy-E5p_OSWk3ueccglF8auXVDdK-BkCwFwRJT0IZXcGHFL93Tu6WzR4s9z-dqKN5aahFy4q_qnIimG6FXM1Q3KXKeYdYwlR9YCWO8rzYspgY3rHxr3n_jJ6xG1zl9ve8CTHtJ4YW1FewG4nWv07xp0axmBCob5y9c3jmYcOE92OuAjMT-pWK75o6ruA"/>
+<span class="absolute -bottom-1 -right-1 w-4 h-4 bg-surface-container-highest text-text-strong font-label-sm text-label-sm rounded-full flex items-center justify-center font-bold">2</span>
+</div>
+<div class="flex flex-col min-w-0">
+<div class="flex items-center gap-1.5">
+<span class="font-label-md text-label-md text-text-strong truncate">Maya Patel</span>
+<span class="bg-surface-tint-violet text-primary font-label-sm text-label-sm px-1.5 py-0.2 rounded-full font-bold">A</span>
+</div>
+<span class="font-body-sm text-body-sm text-text-subtle truncate">Pomodoro Split • 🔥 9-day streak</span>
+</div>
+</div>
+<div class="flex flex-col items-end flex-shrink-0 pl-2">
+<span class="font-headline-md text-headline-md text-text-strong font-bold">91 pts</span>
+<span class="font-label-sm text-label-sm text-secondary font-semibold">-49% delay</span>
+</div>
+</div>
+<!-- Rank 3: Liam Davies -->
+<div class="w-full bg-surface-container-low/60 rounded-xl p-space-sm flex items-center justify-between">
+<div class="flex items-center gap-space-sm min-w-0">
+<div class="relative w-10 h-10 flex-shrink-0">
+<img class="w-10 h-10 rounded-full object-cover" data-alt="Warm studio photo portrait of a young man wearing a light cozy sweater with gentle rim lighting and friendly expression." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCqzBdE6OZNmcu4JwMknMvNOmXv52bf_awZspUmK5bvPr3jSPNJAukE7dGhvPdXg8l1jISSgvmNPq8DgFInPAI8MRaleiTvBbV6T29oaSgKuvYPZr-9HeKQnLUEUob3vHPLx5-r3F3hTuPkP3YFPg_F46ahL2u4sxS4UqL-WRteCygaIj7DIpdfKRZ5ztu_wLhjgS3FnCrVQfUxSznN01cWQWNcqoK3zIpZ7GF2RwiILCFsDT2KPkRQ"/>
+<span class="absolute -bottom-1 -right-1 w-4 h-4 bg-surface-container-highest text-text-strong font-label-sm text-label-sm rounded-full flex items-center justify-center font-bold">3</span>
+</div>
+<div class="flex flex-col min-w-0">
+<div class="flex items-center gap-1.5">
+<span class="font-label-md text-label-md text-text-strong truncate">Liam Davies</span>
+<span class="bg-surface-tint-violet text-primary font-label-sm text-label-sm px-1.5 py-0.2 rounded-full font-bold">A-</span>
+</div>
+<span class="font-body-sm text-body-sm text-text-subtle truncate">Morning Walk Primer • 🔥 7-day streak</span>
+</div>
+</div>
+<div class="flex flex-col items-end flex-shrink-0 pl-2">
+<span class="font-headline-md text-headline-md text-text-strong font-bold">88 pts</span>
+<span class="font-label-sm text-label-sm text-secondary font-semibold">-42% delay</span>
+</div>
+</div>
+<!-- Rank 4: Sarah Lin -->
+<div class="w-full bg-surface-container-low/60 rounded-xl p-space-sm flex items-center justify-between">
+<div class="flex items-center gap-space-sm min-w-0">
+<div class="relative w-10 h-10 flex-shrink-0">
+<img class="w-10 h-10 rounded-full object-cover" data-alt="Close up modern portrait avatar of a creative professional woman with a calm and confident gaze on a clean neutral background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuANi2uLIv7jI8f0rAANT89M71SL1TI-bFKJBgd3wHcQH0CCilXRrVyc7hlPvg0pWwNa-sw5x0Dy95P30HgErl_8vH5kQoxzDVQTg8zoAh2kZV5jbuvTdWr83P6dIT89NGJJSvMP0QYMW9T2ohvL7ohCQjHf2cDb8n63rIk9fBhXLekRfpU6juEwBXeUdw9pz0lMgnvwZZaWEZngcuMOdecmQxvdbJcC8-gJ_NjjX01u10iUPVZ4L7Qh"/>
+<span class="absolute -bottom-1 -right-1 w-4 h-4 bg-surface-container-highest text-text-strong font-label-sm text-label-sm rounded-full flex items-center justify-center font-bold">4</span>
+</div>
+<div class="flex flex-col min-w-0">
+<div class="flex items-center gap-1.5">
+<span class="font-label-md text-label-md text-text-strong truncate">Sarah Lin</span>
+<span class="bg-surface-tint-amber text-tertiary font-label-sm text-label-sm px-1.5 py-0.2 rounded-full font-bold">B+</span>
+</div>
+<span class="font-body-sm text-body-sm text-text-subtle truncate">Digital Sunset • 4-day streak</span>
+</div>
+</div>
+<div class="flex flex-col items-end flex-shrink-0 pl-2">
+<span class="font-headline-md text-headline-md text-text-strong font-bold">84 pts</span>
+<span class="font-label-sm text-label-sm text-secondary font-semibold">-35% delay</span>
+</div>
+</div>
+</div>
+<!-- Collaborative Action Row -->
+<div class="grid grid-cols-2 gap-space-sm pt-1">
+<button class="w-full bg-surface-tint-violet text-primary py-2.5 px-3 rounded-full font-label-md text-label-md flex items-center justify-center gap-1.5 active:scale-95 transition-transform">
+<span class="material-symbols-outlined text-[18px]">celebration</span>
+        Nudge Circle
+      </button>
+<button class="w-full bg-primary text-on-primary py-2.5 px-3 rounded-full font-label-md text-label-md flex items-center justify-center gap-1.5 shadow-[0_8px_16px_-2px_rgba(99,91,255,0.35)] active:scale-95 transition-transform">
+<span class="material-symbols-outlined text-[18px]">share</span>
+        Share Protocol
+      </button>
+</div>
+</div>
+<!-- DELIGHT TOUCH: AI HABIT RECOMMENDATION TOAST -->
+<div class="w-full bg-gradient-to-r from-surface-tint-violet via-surface-container-low to-surface-tint-blue rounded-2xl p-space-md flex items-center justify-between shadow-sm">
+<div class="flex items-center gap-space-sm">
+<div class="w-9 h-9 rounded-full bg-primary text-on-primary flex items-center justify-center shadow-sm">
+<span class="material-symbols-outlined text-[20px]">auto_awesome</span>
+</div>
+<div class="flex flex-col">
+<span class="font-label-md text-label-md text-text-strong font-bold">Suggested Lab Experiment #05</span>
+<span class="font-body-sm text-body-sm text-text-subtle">"Feynman 15-Min Voice Note" fits your 3 PM hesitation.</span>
+</div>
+</div>
+<button class="w-8 h-8 rounded-full bg-neutral-card flex items-center justify-center text-primary shadow-sm active:scale-95 transition-transform">
+<span class="material-symbols-outlined text-[18px]">add</span>
+</button>
+</div>
+</div></main><nav class="fixed bottom-0 inset-x-0 z-50 pb-safe px-margin-sm pointer-events-none" data-active-classes="text-primary font-bold"><div class="pointer-events-auto mx-auto max-w-md h-16 rounded-full bg-neutral-card/90 backdrop-blur-xl shadow-[0_12px_32px_-4px_rgba(99,91,255,0.12),0_4px_12px_-2px_rgba(15,23,42,0.04)] px-space-xs flex items-center justify-around"><a class="flex flex-col items-center justify-center min-w-[56px] h-12 rounded-full text-text-subtle hover:text-primary transition-all duration-200 active:scale-95" data-path="today" href="#"><span class="material-symbols-outlined text-[22px]">wb_sunny</span><span class="font-label-sm text-label-sm mt-0.5">Today</span></a><a class="flex flex-col items-center justify-center min-w-[56px] h-12 rounded-full text-text-subtle hover:text-primary transition-all duration-200 active:scale-95" data-path="delay-log" href="#"><span class="material-symbols-outlined text-[22px]">hourglass_empty</span><span class="font-label-sm text-label-sm mt-0.5">Delay Log</span></a><a class="flex flex-col items-center justify-center min-w-[56px] h-12 rounded-full text-text-subtle hover:text-primary transition-all duration-200 active:scale-95" data-path="lab" href="#"><span class="material-symbols-outlined text-[22px]">science</span><span class="font-label-sm text-label-sm mt-0.5">Lab</span></a><a class="flex flex-col items-center justify-center min-w-[56px] h-12 rounded-full text-text-subtle hover:text-primary transition-all duration-200 active:scale-95" data-path="ai-coach" href="#"><span class="material-symbols-outlined text-[22px]">auto_awesome</span><span class="font-label-sm text-label-sm mt-0.5">AI Coach</span></a><a class="flex flex-col items-center justify-center min-w-[56px] h-12 rounded-full text-text-subtle hover:text-primary transition-all duration-200 active:scale-95" data-path="insights" href="#"><span class="material-symbols-outlined text-[22px]">bar_chart</span><span class="font-label-sm text-label-sm mt-0.5">Insights</span></a></div></nav></body></html>
