@@ -1,0 +1,90 @@
+FocusLoop Mobile Application - React Native UI Changelog
+=========================================================
+
+Date: September 25, 2026
+Design Reference: stitch_minimalist_mobile_app_ui.zip (Luminous Clarity Design System)
+
+1. Design System & Theme Configuration
+--------------------------------------
+- File: mobile/src/constants/theme.ts
+- Description: Updated the design tokens with the complete "Luminous Clarity" color palette:
+  * Primary Violet (#493ee5, #635bff) for key actions and active navigation items.
+  * Secondary Mint (#006c49, #6cf8bb) for task completion, streaks, and success badges.
+  * Categorical Pastel Washes:
+    - Lavender Tint (#F2F0FF) for Tasks.
+    - Sky Tint (#EDF5FF) for Focus Time & Telemetry.
+    - Mint Tint (#ECFDF5) for Start Lag & Empirical Results.
+    - Warm Amber Tint (#FFFBEB) for Recovery, Sleep & Friction Alerts.
+    - Rose Tint (#FFF0F0) for Delays & Intercepts.
+  * Preserved full backward-compatibility with existing starter hooks.
+
+2. Shared Components
+--------------------
+- File: mobile/src/components/Header.tsx
+  * Created top app bar containing the FocusLoop logo badge, screen title, notification bell, and user avatar.
+- File: mobile/src/components/BottomDock.tsx
+  * Built a floating bottom navigation dock matching the exact zip design with 5 items:
+    1. Today
+    2. Delay Log
+    3. Lab
+    4. AI Coach
+    5. Insights
+
+3. Implemented Screens (Based strictly on ZIP HTML designs)
+---------------------------------------------------------
+- File: mobile/src/app/(tabs)/index.tsx (Today's Loop Hub)
+  * Greeting banner: "Hello, Alex 👋 - Good Morning!" with 3D assistant robot badge.
+  * AI Quick Input Bar with prompt placeholder and action buttons.
+  * Today's Overview 4-Card Bento Grid:
+    - Tasks: 4 / 6 Done
+    - Focus: 3.8 hrs
+    - Start Lag: 12 mins (57% faster today)
+    - Recovery: 7h 45m (Well Rested ✨)
+  * Mindful Delay Check banner with zero-guilt prompt.
+  * Active Loop Experiment Card: "10-Min Micro-Start Buffer" (Day 4 of 7, 57% progress bar).
+  * Daily Loop Habits & Tasks with filter chips (All, High Priority, In Progress, Done) and 1-tap quick action update buttons (Done, Partial, Defer).
+  * Next Up Today schedule snapshot card.
+
+- File: mobile/src/app/(tabs)/delay-log.tsx (Delay Friction Log)
+  * Compassionate Nudge header & Friction Intercept banner.
+  * Interactive circular friction dial gauge displaying elapsed friction (18:45) and target context ("Drafting Architecture Spec").
+  * Primary Ergonomic Actions: "I'm Ready to Start Task", "5-Min Breathe", "Dismiss Window".
+  * 2-Minute Cognitive Reset micro-commitment card.
+  * Contextual Local Telemetry: YouTube Feed (12m active), Social & Feeds (4m active), 5h 40m Sleep Recorded alert.
+  * On-device Attribution Ledger & Privacy Commitment card.
+
+- File: mobile/src/app/(tabs)/lab.tsx (Active Experiment Lab)
+  * Active Experiment Hero Banner: 10-Minute Micro-Start Buffer (Day 4 of 7, Core Hypothesis, Trigger Rule).
+  * Empirical Results: Baseline (38m) vs Current Protocol (16m latency, -57% start delay!).
+  * Initiation Friction Trend step chart (Baseline 38m -> Day 2 19m -> Today 12m).
+  * Recent Test Sessions list with status badges ("Worked", "Partial").
+  * FocusLoop AI Engine Insight card.
+  * Action buttons: "Log Protocol Check-in", "Adjust Rule", "Conclude & Adopt".
+
+- File: mobile/src/app/(tabs)/ai-coach.tsx (AI Behavioral Coach)
+  * AI Context Active banner (182 local data points, local & private).
+  * Horizontal scrollable suggested inquiry pills.
+  * Grounded conversational feed:
+    - Detailed behavioral breakdown explaining afternoon start delay.
+    - Supporting evidence list (Sleep correlation, App context).
+    - Latency comparison bar chart (Baseline 38m vs Protocol 16m).
+    - Deep-dive action buttons ("View Protocol Spec", "Inspect 14 Episodes").
+  * Autonomous Routine Tuning proposal card ("Apply Dynamic Rule" / "Dismiss").
+  * Persistent interactive bottom chat bar with mic and submit buttons.
+
+- File: mobile/src/app/(tabs)/insights.tsx (Behavioral Analytics & Impact)
+  * Top Segmented Sliding Toggle: Overview & Trends / Experiment Impact / Peer Circles.
+  * Productivity & Focus Score Hero Card (88% score, +14% trend).
+  * Time Distribution Donut Chart & Legend (Deep Work 46%, Tasks Done 24%, Micro-Start 16%, Delay Log 14%).
+  * Daily Focus Rhythm 7-Day Bar Chart (Mon - Sun).
+  * Key Behavioral Patterns cards (Best Focus Window 9:00-11:30 AM, Main Friction Trigger, Top Intervention).
+  * Verified Experiments Impact Deck (Grade A+, Grade B+, Grade A).
+  * Behavioral Mastery Tier Stepper (Flow Master II, 78% progress).
+  * Peer Circles Leaderboard (Alex Chen 94 pts Grade A+, Maya Patel 91 pts, Liam Davies 88 pts, Sarah Lin 84 pts).
+
+4. Routing & Layout
+-------------------
+- File: mobile/src/app/_layout.tsx
+  * Configured root Stack layout for Expo Router.
+- File: mobile/src/app/index.tsx
+  * Redirects root route directly to /(tabs).
