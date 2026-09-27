@@ -114,15 +114,28 @@ class BehaviorMetricsCalculator:
             "max_delay_minutes": max_delay,
         }
 
-    def compute_time_of_day_breakdown(self) -> Dict[str, Any]:
-        """Analyzes task completion and delay by morning, afternoon, evening, night."""
+    def compute_time_of_day_breakdown(
+        self,
+        date: Optional[str] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Analyzes task completion and delay by morning, afternoon, evening, night.
+        Supports filtering by specific date or date range [start_date, end_date].
+        """
         # Join checkin with task to inspect planned_time
-        results = (
+        query = (
             self.db.query(TaskCheckin, Task)
             .join(Task, TaskCheckin.task_id == Task.id)
             .filter(TaskCheckin.user_id == self.user_id)
-            .all()
         )
+        if date:
+            query = query.filter(TaskCheckin.date == date)
+        if start_date:
+            query = query.filter(TaskCheckin.date >= start_date)
+        if end_date:
+            query = query.filter(TaskCheckin.date <= end_date)
+        results = query.all()
 
         buckets = {
             "morning": {"total": 0, "done": 0, "delays": []},    # 06:00 - 11:59
@@ -165,9 +178,120 @@ class BehaviorMetricsCalculator:
                 "done_tasks": done,
                 "completion_rate": comp_rate,
                 "average_delay_minutes": avg_del,
+                "delay_observations": len(delays),
             }
 
         return breakdown
+
+    def compute_daily_behavior_series(
+        self,
+        metric: str = "start_delay",
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        time_of_day: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        Computes real day-by-day behavioral observation points.
+        Never fabricates dates or points; only dates with actual checkins are included.
+        metric: "start_delay" (avg minutes per day) or "completion_rate" (done+0.5*partial)/total.
+        time_of_day: optional filter for "morning", "afternoon", "evening", "night".
+        Returns: list of {"date": "YYYY-MM-DD", "value": float, "sample_size": int, "unit": str}
+        """
+        query = (
+            self.db.query(TaskCheckin, Task)
+            .join(Task, TaskCheckin.task_id == Task.id)
+            .filter(TaskCheckin.user_id == self.user_id)
+        )
+        if start_date:
+            query = query.filter(TaskCheckin.date >= start_date)
+        if end_date:
+            query = query.filter(TaskCheckin.date <= end_date)
+
+        rows = query.all()
+        by_date: Dict[str, List[Any]] = {}
+
+        for checkin, task in rows:
+            if time_of_day:
+                planned_time = task.planned_time or "09:00"
+                try:
+                    hour = int(planned_time.split(":")[0])
+                except Exception:
+                    hour = 9
+
+                if 6 <= hour < 12:
+                    tod = "morning"
+                elif 12 <= hour < 17:
+                    tod = "afternoon"
+                elif 17 <= hour < 22:
+                    tod = "evening"
+                else:
+                    tod = "night"
+
+                if tod != time_of_day:
+                    continue
+
+            d_str = checkin.date
+            if not d_str:
+                continue
+            if d_str not in by_date:
+                by_date[d_str] = []
+            by_date[d_str].append(checkin)
+
+        series = []
+        for d_str in sorted(by_date.keys()):
+            day_checkins = by_date[d_str]
+            if metric == "start_delay":
+                delays = [c.start_delay_minutes for c in day_checkins if c.start_delay_minutes is not None]
+                if delays:
+                    series.append({
+                        "date": d_str,
+                        "value": round(sum(delays) / len(delays), 1),
+                        "sample_size": len(delays),
+                        "unit": "min",
+                    })
+            elif metric == "completion_rate":
+                tot = len(day_checkins)
+                if tot > 0:
+                    done = sum(1 for c in day_checkins if c.status == "done")
+                    partial = sum(1 for c in day_checkins if c.status == "partial")
+                    rate = round((done + 0.5 * partial) / tot, 2)
+                    series.append({
+                        "date": d_str,
+                        "value": round(rate * 100, 1),
+                        "sample_size": tot,
+                        "unit": "%",
+                    })
+
+        return series
+
+    @staticmethod
+    def calculate_recency_weighted_average(
+        observations: List[tuple],  # List of (date_str "YYYY-MM-DD", numeric_val)
+        half_life_days: float = 7.0,
+        ref_date: Optional[str] = None,
+    ) -> Optional[float]:
+        """
+        Deterministic continuous exponential decay weighting:
+        weight = exp(-lambda * age_days) where lambda = ln(2) / half_life_days.
+        Returns recency-weighted average, or None if observations is empty.
+        """
+        if not observations:
+            return None
+        import math
+        ref_d = datetime.strptime(ref_date, "%Y-%m-%d").date() if ref_date else datetime.utcnow().date()
+        decay_lambda = math.log(2.0) / max(1.0, half_life_days)
+        total_weight = 0.0
+        weighted_sum = 0.0
+        for date_str, val in observations:
+            try:
+                obs_d = datetime.strptime(date_str, "%Y-%m-%d").date()
+                age_days = max(0, (ref_d - obs_d).days)
+            except Exception:
+                age_days = 0
+            w = math.exp(-decay_lambda * age_days)
+            weighted_sum += w * val
+            total_weight += w
+        return round(weighted_sum / total_weight, 1) if total_weight > 0 else None
 
     def compute_procrastination_stats(self, date: Optional[str] = None) -> Dict[str, Any]:
         """Aggregates confirmed and estimated procrastination episodes."""
@@ -215,16 +339,33 @@ class BehaviorMetricsCalculator:
         }
 
 
-    def compute_top_distractions(self) -> List[Dict[str, Any]]:
-        """Identifies top apps logged during distraction or screen usage."""
+    def compute_top_distractions(
+        self,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """Identifies top apps logged during distraction or screen usage, optionally scoped to [start_date, end_date]."""
+        query = self.db.query(
+            ScreenUsage.app_name,
+            func.sum(ScreenUsage.duration_seconds).label("total_duration"),
+            func.count(ScreenUsage.id).label("session_count"),
+        ).filter(ScreenUsage.user_id == self.user_id)
+
+        if start_date:
+            try:
+                start_dt = datetime.combine(datetime.strptime(start_date, "%Y-%m-%d").date(), time.min)
+                query = query.filter(ScreenUsage.started_at >= start_dt)
+            except Exception:
+                pass
+        if end_date:
+            try:
+                end_dt = datetime.combine(datetime.strptime(end_date, "%Y-%m-%d").date(), time.max)
+                query = query.filter(ScreenUsage.started_at <= end_dt)
+            except Exception:
+                pass
+
         usages = (
-            self.db.query(
-                ScreenUsage.app_name,
-                func.sum(ScreenUsage.duration_seconds).label("total_duration"),
-                func.count(ScreenUsage.id).label("session_count"),
-            )
-            .filter(ScreenUsage.user_id == self.user_id)
-            .group_by(ScreenUsage.app_name)
+            query.group_by(ScreenUsage.app_name)
             .order_by(func.sum(ScreenUsage.duration_seconds).desc())
             .limit(5)
             .all()
@@ -238,6 +379,54 @@ class BehaviorMetricsCalculator:
             }
             for row in usages
         ]
+
+    def compute_daily_distraction_series(
+        self,
+        app_name: Optional[str] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        Computes real day-by-day distraction minutes for a specific app or all screen usage.
+        Never fabricates dates or points; only dates with actual logged screen usage are included.
+        Returns: list of {"date": "YYYY-MM-DD", "value": float, "sample_size": int, "unit": "min"}
+        """
+        query = self.db.query(ScreenUsage).filter(ScreenUsage.user_id == self.user_id)
+        if app_name:
+            query = query.filter(ScreenUsage.app_name == app_name)
+        if start_date:
+            try:
+                start_dt = datetime.combine(datetime.strptime(start_date, "%Y-%m-%d").date(), time.min)
+                query = query.filter(ScreenUsage.started_at >= start_dt)
+            except Exception:
+                pass
+        if end_date:
+            try:
+                end_dt = datetime.combine(datetime.strptime(end_date, "%Y-%m-%d").date(), time.max)
+                query = query.filter(ScreenUsage.started_at <= end_dt)
+            except Exception:
+                pass
+
+        usages = query.order_by(ScreenUsage.started_at.asc()).all()
+        by_date: Dict[str, List[int]] = {}
+        for u in usages:
+            d_str = u.started_at.strftime("%Y-%m-%d")
+            if d_str not in by_date:
+                by_date[d_str] = []
+            by_date[d_str].append(u.duration_seconds or 0)
+
+        series = []
+        for d_str in sorted(by_date.keys()):
+            durations = by_date[d_str]
+            total_min = round(sum(durations) / 60.0, 1)
+            series.append({
+                "date": d_str,
+                "value": total_min,
+                "sample_size": len(durations),
+                "unit": "min",
+            })
+        return series
+
 
     def compute_behavior_score(self) -> float:
         """

@@ -33,7 +33,7 @@ class BehaviorPattern(Base):
     sample_size = Column(Integer, default=1)
     first_detected = Column(DateTime, default=datetime.utcnow, nullable=False)
     last_detected = Column(DateTime, default=datetime.utcnow, nullable=False)
-    status = Column(String(30), default="active")  # "active", "improving", "resolved", "archived"
+    status = Column(String(30), default="active")  # "active", "improving", "weakening", "inactive", "resolved", "archived"
     supporting_metrics = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 

@@ -20,6 +20,7 @@ import { useBehavior } from '@/hooks/useBehavior';
 import { useSocial } from '@/hooks/useSocial';
 import { SocialProfileResponse } from '@/types/profile';
 import { UserLookupResponse } from '@/types/social';
+import { PatternEvidenceCard } from '@/components/PatternEvidenceCard';
 
 export default function InsightsScreen() {
   const router = useRouter();
@@ -265,23 +266,7 @@ export default function InsightsScreen() {
                 </View>
               ) : (
                 patterns.map((pat) => (
-                  <View key={pat.id} style={styles.patternCard}>
-                    <View style={styles.patternIconBox}>
-                      <Ionicons name="bulb-outline" size={18} color={Colors.primary} />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <View style={styles.patternTopRow}>
-                        <Text style={styles.patternTitle}>{pat.title}</Text>
-                        <View style={styles.patternTagMint}>
-                          <Text style={styles.patternTagMintText}>{pat.confidence}</Text>
-                        </View>
-                      </View>
-                      <Text style={styles.patternDesc}>{pat.description}</Text>
-                      <Text style={styles.patternMeta}>
-                        Sample Size: {pat.sample_size} sessions • Type: {pat.pattern_type}
-                      </Text>
-                    </View>
-                  </View>
+                  <PatternEvidenceCard key={pat.id} pattern={pat} />
                 ))
               )}
             </View>

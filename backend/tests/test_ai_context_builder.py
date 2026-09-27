@@ -258,11 +258,75 @@ def test_llm_prompts_and_service_grounding_constraints():
     assert "NEVER invent unmeasured statistics" in SYSTEM_EXPLAINER_PROMPT
     assert "Distinguish Measured Evidence from Perceptions and Hypotheses" in SYSTEM_EXPLAINER_PROMPT
     assert "Do NOT diagnose medical or psychological conditions" in SYSTEM_EXPLAINER_PROMPT
+    assert "Current vs Historical/Resolved Patterns" in SYSTEM_EXPLAINER_PROMPT
     assert "lazy" in SYSTEM_EXPLAINER_PROMPT
 
     # Companion prompt constraints
     assert "Do not invent metrics" in CHAT_COMPANION_PROMPT
     assert "Distinguish user self-reported perceptions from measured backend evidence" in CHAT_COMPANION_PROMPT
+
+
+def test_context_builder_current_vs_resolved_patterns(db_session, test_user):
+    """
+    Part 9: Verifies AIContextBuilder clearly separates:
+    - current_patterns: active, improving, weakening
+    - resolved_patterns: resolved, archived
+    and includes explicit non-active guidance for resolved patterns.
+    """
+    p_active = BehaviorPattern(
+        user_id=test_user.id,
+        pattern_type="start_delay_resistance",
+        title="Initial Task Initiation Friction",
+        description="Active delay",
+        status="active",
+        confidence="moderate",
+        sample_size=10,
+    )
+    p_improving = BehaviorPattern(
+        user_id=test_user.id,
+        pattern_type="afternoon_slump",
+        title="Afternoon Focus Friction (Improving)",
+        description="Delay improving",
+        status="improving",
+        confidence="moderate",
+        sample_size=8,
+    )
+    p_resolved = BehaviorPattern(
+        user_id=test_user.id,
+        pattern_type="primary_distraction",
+        title="Frequent Transition to Instagram (Resolved)",
+        description="Resolved distraction",
+        status="resolved",
+        confidence="low",
+        sample_size=12,
+    )
+    db_session.add_all([p_active, p_improving, p_resolved])
+    db_session.commit()
+
+    builder = AIContextBuilder(db_session, test_user.id)
+    ctx = builder.build_context(question="What are my current focus habits and patterns?")
+
+    # 1. Separated payloads exist
+    assert hasattr(ctx, "current_patterns")
+    assert hasattr(ctx, "resolved_patterns")
+
+    current_ids = [p["id"] for p in ctx.current_patterns]
+    resolved_ids = [p["id"] for p in ctx.resolved_patterns]
+
+    assert p_active.id in current_ids
+    assert p_improving.id in current_ids
+    assert p_resolved.id not in current_ids
+
+    assert p_resolved.id in resolved_ids
+    assert p_active.id not in resolved_ids
+    assert p_improving.id not in resolved_ids
+
+    # 2. Resolved pattern has explicit guidance note
+    resolved_entry = next(p for p in ctx.resolved_patterns if p["id"] == p_resolved.id)
+    assert resolved_entry["is_current"] is False
+    assert resolved_entry["lifecycle_category"] == "historical_resolved"
+    assert "HISTORICAL / RESOLVED" in resolved_entry["explanation_guidance"]
+
 
 
 def test_chat_endpoints_end_to_end_with_context_builder(client):

@@ -14,7 +14,7 @@ FocusLoop is an Android-first personal productivity and behavioral-learning app 
 | **Authentication & Sessions** | ✅ Complete | Argon2id hashing, JWT access tokens, persistent refresh sessions & revocation |
 | **Protected Route Security** | ✅ Complete | Strict user isolation via `Depends(get_current_user)`, zero data leakage |
 | **Deterministic Behavior Engine** | ✅ Complete | Zero LLM hallucination: completion, delay, and distraction calculations |
-| **Pattern Detection Engine** | ✅ Complete | Statistical detection: Afternoon Slump, Start Delays, Morning Clarity |
+| **Pattern Engine V2** | ✅ Complete | Statistical detection with recency decay, contradiction detection, and Inactive vs Resolved semantics |
 | **Behavior Profile & Intelligence** | ✅ Complete | Personal profile with strengths, weaknesses, insights, and experiments |
 | **Social Profile & Privacy System** | ✅ Complete | Dual-profile architecture with strict backend privacy enforcement |
 | **Behavior Progress Curve** | ✅ Complete | 14-day continuous growth trajectory (improving, stable, setback, recovery) |
@@ -30,7 +30,7 @@ FocusLoop is an Android-first personal productivity and behavioral-learning app 
 | **Experiment Lifecycle Enforcement** | ✅ Complete | `suggested → active → completed`; status-gated evaluation; profile refresh on completion |
 | **Experiment Generator** | ✅ Complete | Pattern-driven suggestions; idempotent (no duplicate experiment titles per user) |
 | **Lab Screen (Experiment UI)** | ✅ Complete | Crash fixed; status-aware hero banner, Start/Evaluate/Results display |
-| **Automated Test Suite** | ✅ Passing | **94 backend tests passing** (Auth, behavior engine, AI context, task lifecycle, social, time-bounded experiments) |
+| **Automated Test Suite** | ✅ Passing | **121 backend tests passing** (Auth, behavior patterns v2 semantics, AI context, task lifecycle, social, time-bounded experiments) |
 | **Mobile Frontend (React Native/Expo)** | ✅ Connected | All major endpoints integrated end-to-end; Lab screen stable; physical Android testing verified |
 
 ---

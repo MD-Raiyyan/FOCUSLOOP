@@ -76,19 +76,13 @@ def get_profile(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Retrieves the dynamic learned behavior profile."""
-    profile = db.query(BehaviorProfile).filter(BehaviorProfile.user_id == user.id).first()
-    if not profile:
-        profile_mgr = BehaviorProfileManager(db, user.id)
-        profile_data = profile_mgr.refresh_profile()
-        return {
-            "user_id": user.id,
-            "profile_data": profile_data,
-            "model_version": "v1.0",
-        }
+    """Retrieves the dynamic learned behavior profile, ensuring it reflects latest evidence."""
+    profile_mgr = BehaviorProfileManager(db, user.id)
+    profile_data = profile_mgr.refresh_profile()
+    profile = profile_mgr.get_or_create_profile()
     return {
         "user_id": user.id,
-        "profile_data": profile.profile_data,
+        "profile_data": profile_data,
         "model_version": profile.model_version,
         "updated_at": profile.updated_at,
     }

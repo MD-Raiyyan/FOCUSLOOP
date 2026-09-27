@@ -9,6 +9,51 @@ export interface MetricResponse {
   created_at: string;
 }
 
+export interface ContextComparisonPoint {
+  context: string;
+  label: string;
+  value: number;
+  sample_size: number;
+  unit: string;
+}
+
+export interface TimeSeriesPoint {
+  date: string;
+  value: number;
+  sample_size: number;
+  unit: string;
+}
+
+export interface WindowMetric {
+  label: string;
+  value: number | null;
+  sample_size: number;
+  unit: string;
+  weighted_value?: number | null;
+}
+
+export interface SupportingMetrics {
+  pattern_id?: string;
+  pattern_type?: string;
+  status?: string;
+  confidence?: string;
+  sample_size?: number;
+  distinct_days?: number;
+  first_observed_date?: string;
+  last_observed_date?: string;
+  trend?: string;
+  metric_name?: string;
+  unit?: string;
+  contradiction_detected?: boolean;
+  insufficient_evidence?: boolean;
+  explanation?: string;
+  context_comparison?: ContextComparisonPoint[];
+  time_series?: TimeSeriesPoint[];
+  historical_window?: WindowMetric;
+  recent_window?: WindowMetric;
+  [key: string]: any;
+}
+
 export interface PatternResponse {
   id: string;
   user_id: string;
@@ -20,7 +65,7 @@ export interface PatternResponse {
   first_detected: string;
   last_detected: string;
   status: string;
-  supporting_metrics?: Record<string, any> | null;
+  supporting_metrics?: SupportingMetrics | null;
   created_at: string;
 }
 

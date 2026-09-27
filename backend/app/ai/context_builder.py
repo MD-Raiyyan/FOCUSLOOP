@@ -178,22 +178,25 @@ class AIContextBuilder:
                 "provenance": "behavior_engine.continuous_progress",
             }
 
-        # 6. Active Behavioral Patterns (Filtered & Preserving Provenance)
+        # 6. Behavioral Patterns (Active, Improving, Weakening, Inactive, and Resolved with Provenance)
         patterns_query = (
             self.db.query(BehaviorPattern)
             .filter(
                 BehaviorPattern.user_id == self.user_id,
-                BehaviorPattern.status == "active",
+                BehaviorPattern.status.in_(["active", "improving", "weakening", "resolved", "archived", "inactive"]),
             )
         )
         if specific_pattern_id:
             patterns_query = patterns_query.filter(BehaviorPattern.id == specific_pattern_id)
-        all_active_patterns = patterns_query.all()
+        all_patterns = patterns_query.all()
 
         patterns_payload: List[Dict[str, Any]] = []
+        current_patterns_payload: List[Dict[str, Any]] = []
+        inactive_patterns_payload: List[Dict[str, Any]] = []
+        resolved_patterns_payload: List[Dict[str, Any]] = []
         q_text = (question or "").lower()
 
-        for p in all_active_patterns:
+        for p in all_patterns:
             # Include if specific pattern ID requested, or general coaching, or pattern query
             include = False
             if specific_pattern_id or "patterns_habits" in intents or "general_coaching" in intents:
@@ -210,23 +213,69 @@ class AIContextBuilder:
                 include = True
 
             if include:
-                patterns_payload.append({
+                sup = p.supporting_metrics or {}
+                status_str = (p.status or "active").lower()
+                is_inactive = (
+                    status_str == "inactive"
+                    or sup.get("trend") == "inactive"
+                    or bool(sup.get("insufficient_current_evidence"))
+                )
+                is_resolved = not is_inactive and status_str in ("resolved", "archived")
+
+                if is_inactive:
+                    lifecycle_cat = "insufficient_current_evidence"
+                    is_current = False
+                elif is_resolved:
+                    lifecycle_cat = "historical_resolved"
+                    is_current = False
+                else:
+                    lifecycle_cat = "current_pattern"
+                    is_current = True
+
+                pattern_dict = {
                     "id": p.id,
                     "pattern_type": p.pattern_type,
                     "title": p.title,
                     "description": p.description,
+                    "status": p.status,
+                    "trend": sup.get("trend", p.status),
                     "confidence": p.confidence,  # "low", "moderate", "high"
                     "sample_size": p.sample_size,
+                    "is_current": is_current,
+                    "lifecycle_category": lifecycle_cat,
+                    "recent_value": sup.get("recent_window", {}).get("value"),
+                    "historical_value": sup.get("historical_window", {}).get("value"),
                     "time_window": {
                         "first_detected": p.first_detected.isoformat() if p.first_detected else None,
                         "last_detected": p.last_detected.isoformat() if p.last_detected else None,
                     },
-                    "supporting_metrics": p.supporting_metrics or {},
+                    "supporting_metrics": sup,
                     "source": "behavior_engine.pattern_detector",
-                })
+                }
 
-        if not patterns_payload and not specific_pattern_id:
+                if is_inactive:
+                    pattern_dict["explanation_guidance"] = (
+                        "INSUFFICIENT CURRENT EVIDENCE / INACTIVE: This pattern was observed historically, "
+                        "but there are not enough recent observations to determine if it is currently present. "
+                        "You must NOT say this pattern was resolved or overcome. "
+                        "Instead, explain that more recent observations are needed to confirm whether the pattern persists."
+                    )
+                    inactive_patterns_payload.append(pattern_dict)
+                elif is_resolved:
+                    pattern_dict["explanation_guidance"] = (
+                        "HISTORICAL / RESOLVED: This pattern has sufficient recent behavioral evidence demonstrating "
+                        "resolution. It must NOT be described as an active behavioral problem."
+                    )
+                    resolved_patterns_payload.append(pattern_dict)
+                else:
+                    current_patterns_payload.append(pattern_dict)
+
+                patterns_payload.append(pattern_dict)
+
+        if not current_patterns_payload and not specific_pattern_id:
             limitations.append("No active recurring behavioral patterns detected with sufficient confidence yet.")
+        if inactive_patterns_payload and not specific_pattern_id:
+            limitations.append("Some historical patterns have insufficient recent observations to determine their active state.")
 
         # 7. Behavioral Profile (Internal Intelligence Extraction)
         profile_obj = (
@@ -441,6 +490,9 @@ class AIContextBuilder:
             user_context=user_context_payload,
             metrics=metrics_payload,
             patterns=patterns_payload,
+            current_patterns=current_patterns_payload,
+            inactive_patterns=inactive_patterns_payload,
+            resolved_patterns=resolved_patterns_payload,
             behavior_profile=profile_payload,
             experiments=experiments_payload,
             telemetry_status=telemetry_status,
