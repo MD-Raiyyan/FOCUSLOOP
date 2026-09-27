@@ -172,6 +172,28 @@ class BehaviorProfileManager:
                     f"within active {active_goal.category.lower()} workflow ('{active_goal.description}')."
                 )
 
+        # 7b. Project successful interventions from completed experiment results
+        completed_exps = (
+            self.db.query(Experiment)
+            .filter(Experiment.user_id == self.user_id, Experiment.status == "completed")
+            .all()
+        )
+        successful_interventions = []
+        seen_types = set()
+        for exp in completed_exps:
+            for r in exp.results:
+                if r.conclusion == "positive" and exp.intervention_type and exp.intervention_type not in seen_types:
+                    successful_interventions.append(exp.intervention_type)
+                    seen_types.add(exp.intervention_type)
+
+        # 7c. Useful procrastination summary from metrics layer
+        proc_stats = self.metrics_calc.compute_procrastination_stats()
+        procrastination_summary = {
+            "count": proc_stats.get("count", 0),
+            "total_minutes": proc_stats.get("total_minutes", 0.0),
+            "average_duration_minutes": proc_stats.get("average_duration_minutes", 0.0),
+        }
+
         profile_dict = {
             "task_completion_rate": comp_stats["completion_rate"],
             "total_tasks_completed": comp_stats["done"],
@@ -184,6 +206,8 @@ class BehaviorProfileManager:
             "weaknesses": weaknesses,
             "insights": insights,
             "milestones": milestones,
+            "successful_interventions": successful_interventions,
+            "procrastination_summary": procrastination_summary,
             "active_goal_context": goal_context_data,
             "level_info": {
                 "level_number": level_info.level_number,

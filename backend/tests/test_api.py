@@ -120,18 +120,26 @@ def test_checkins_and_procrastination_flow(client):
 
 
 def test_behavior_engine_and_experiments(client):
-    # Create a task and checkin
+    # Create a task and checkins across multiple days to form a genuine behavioral pattern
     task = client.post("/api/v1/tasks", json={"name": "Morning Code", "planned_time": "09:00"}).json()
-    client.post(
-        "/api/v1/checkins",
-        json={
-            "task_id": task["id"],
-            "date": "2026-09-25",
-            "status": "done",
-            "duration_minutes": 40,
-            "start_delay_minutes": 5,
-        },
-    )
+    for day, delay in [
+        ("2026-09-20", 25),
+        ("2026-09-21", 20),
+        ("2026-09-22", 30),
+        ("2026-09-23", 25),
+        ("2026-09-24", 20),
+        ("2026-09-25", 25),
+    ]:
+        client.post(
+            "/api/v1/checkins",
+            json={
+                "task_id": task["id"],
+                "date": day,
+                "status": "done",
+                "duration_minutes": 40,
+                "start_delay_minutes": delay,
+            },
+        )
 
     # Behavior summary
     summary_resp = client.get("/api/v1/behavior/summary")

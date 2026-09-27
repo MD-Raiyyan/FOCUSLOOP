@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -15,6 +16,8 @@ from app.schemas.experiment import (
 )
 from app.experiments.generator import ExperimentGenerator
 from app.experiments.evaluator import ExperimentEvaluator
+from app.experiments.strategy_catalog import get_strategy
+from app.experiments.strategy_selector import StrategySelector
 
 router = APIRouter(prefix="/experiments", tags=["Experiments"])
 
@@ -54,6 +57,18 @@ def create_experiment(
         )
         if pat:
             pattern_snapshot = build_pattern_snapshot(pat)
+
+    # Concurrency enforcement: exactly one active experiment per user
+    active_existing = (
+        db.query(Experiment)
+        .filter(Experiment.user_id == current_user.id, Experiment.status == "active")
+        .first()
+    )
+    if active_existing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User already has an active experiment. Complete or dismiss it before activating a new one.",
+        )
 
     exp = Experiment(
         user_id=current_user.id,
@@ -131,7 +146,7 @@ def update_experiment(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Updates experiment status or duration, enforcing ownership authorization."""
+    """Updates experiment status or duration, enforcing single-active concurrency and baseline locking."""
     exp = (
         db.query(Experiment)
         .filter(Experiment.id == experiment_id, Experiment.user_id == current_user.id)
@@ -140,8 +155,42 @@ def update_experiment(
     if not exp:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Experiment not found or unauthorized")
 
-    if payload.status:
+    if payload.status == "active" and exp.status != "active":
+        # Concurrency enforcement: exactly one active experiment per user
+        active_existing = (
+            db.query(Experiment)
+            .filter(
+                Experiment.user_id == current_user.id,
+                Experiment.status == "active",
+                Experiment.id != exp.id,
+            )
+            .first()
+        )
+        if active_existing:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User already has an active experiment. Complete or dismiss it before activating a new one.",
+            )
+
+        # Baseline Contract: recalculate authoritative baseline over [start_date - 7d, start_date - 1d]
+        today_date = datetime.utcnow().date()
+        today_str = today_date.strftime("%Y-%m-%d")
+        exp.start_date = today_str
+
+        strategy = get_strategy(exp.intervention_type)
+        duration_days = strategy.duration_days if strategy else 5
+        exp.end_date = (today_date + timedelta(days=duration_days)).strftime("%Y-%m-%d")
+
+        selector = StrategySelector(db, current_user.id, ref_date=today_str)
+        auth_baseline = selector.compute_baseline_for_metric(exp.target_metric, today_date)
+        exp.baseline_value = auth_baseline
+        if strategy:
+            exp.target_value = strategy.compute_target(auth_baseline)
+
+        exp.status = "active"
+    elif payload.status:
         exp.status = payload.status
+
     if payload.end_date:
         exp.end_date = payload.end_date
 

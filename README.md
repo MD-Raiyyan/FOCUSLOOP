@@ -28,9 +28,9 @@ FocusLoop is an Android-first personal productivity and behavioral-learning app 
 | **PostgreSQL & Database Layer** | ✅ Complete | Full schema, 4 Alembic migrations, connection pooling, SQLite fallback |
 | **Time-Bounded Experiment Evaluation** | ✅ Complete | Pre-experiment baseline window vs. observation window; no lifetime dilution; `inconclusive` on sparse data |
 | **Experiment Lifecycle Enforcement** | ✅ Complete | `suggested → active → completed`; status-gated evaluation; profile refresh on completion |
-| **Experiment Generator** | ✅ Complete | Pattern-driven suggestions; idempotent (no duplicate experiment titles per user) |
-| **Lab Screen (Experiment UI)** | ✅ Complete | Crash fixed; status-aware hero banner, Start/Evaluate/Results display |
-| **Automated Test Suite** | ✅ Passing | **121 backend tests passing** (Auth, behavior patterns v2 semantics, AI context, task lifecycle, social, time-bounded experiments) |
+| **Deterministic Strategy Selector** | ✅ Complete | Deterministic Strategy Catalog, cooldowns, pattern priority cascade, cold-start observation |
+| **Authoritative Baseline Contract** | ✅ Complete | Suggestion preview vs. activation lock on [T-7, T-1], matching `ExperimentEvaluator.before_value` |
+| **Automated Test Suite** | ✅ Passing | **147 backend tests passing** across pattern engine v2, persistence contracts, strategy selector, and API |
 | **Mobile Frontend (React Native/Expo)** | ✅ Connected | All major endpoints integrated end-to-end; Lab screen stable; physical Android testing verified |
 
 ---

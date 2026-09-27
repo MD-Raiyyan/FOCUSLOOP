@@ -290,6 +290,8 @@ class AIContextBuilder:
             profile_payload["best_focus_window"] = pdata.get("best_focus_window")
             profile_payload["worst_focus_window"] = pdata.get("worst_focus_window")
             profile_payload["common_distraction_app"] = pdata.get("common_distraction_app")
+            profile_payload["successful_interventions"] = pdata.get("successful_interventions", [])
+            profile_payload["procrastination_summary"] = pdata.get("procrastination_summary", {})
 
             if any(i in intents for i in ["patterns_habits", "general_coaching"]):
                 profile_payload["observed_strengths"] = pdata.get("strengths", [])
@@ -319,6 +321,7 @@ class AIContextBuilder:
             for exp in user_experiments:
                 exp_dict: Dict[str, Any] = {
                     "id": exp.id,
+                    "pattern_id": exp.pattern_id,
                     "title": exp.title,
                     "description": exp.description,
                     "hypothesis": exp.hypothesis,
