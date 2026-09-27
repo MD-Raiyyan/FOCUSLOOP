@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, Float, DateTime, ForeignKey, Text
+from sqlalchemy import Column, String, Float, DateTime, ForeignKey, Text, JSON
 from sqlalchemy.orm import relationship
 from app.core.database import Base
 
@@ -21,10 +21,12 @@ class Experiment(Base):
     baseline_value = Column(Float, nullable=True)
     target_value = Column(Float, nullable=True)
     status = Column(String(50), default="suggested")  # "suggested", "active", "completed", "dismissed"
+    pattern_snapshot = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     # Relationships
     user = relationship("User", back_populates="experiments")
+    pattern = relationship("BehaviorPattern", back_populates="experiments")
     results = relationship("ExperimentResult", back_populates="experiment", cascade="all, delete-orphan")
 
 

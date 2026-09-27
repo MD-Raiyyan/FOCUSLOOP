@@ -5,6 +5,8 @@ from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.user import User
 from app.models.experiment import Experiment
+from app.models.behavior import BehaviorPattern
+from app.behavior.snapshot import build_pattern_snapshot
 from app.schemas.experiment import (
     ExperimentCreate,
     ExperimentUpdate,
@@ -37,7 +39,22 @@ def create_experiment(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Creates a custom micro-experiment for authenticated user."""
+    """Creates a custom micro-experiment for authenticated user with immutable historical pattern context."""
+    pattern_snapshot = None
+    if payload.pattern_snapshot:
+        pattern_snapshot = payload.pattern_snapshot
+    elif payload.pattern_id:
+        pat = (
+            db.query(BehaviorPattern)
+            .filter(
+                BehaviorPattern.id == payload.pattern_id,
+                BehaviorPattern.user_id == current_user.id,
+            )
+            .first()
+        )
+        if pat:
+            pattern_snapshot = build_pattern_snapshot(pat)
+
     exp = Experiment(
         user_id=current_user.id,
         title=payload.title,
@@ -50,6 +67,7 @@ def create_experiment(
         baseline_value=payload.baseline_value,
         target_value=payload.target_value,
         pattern_id=payload.pattern_id,
+        pattern_snapshot=pattern_snapshot,
         status="active",
     )
     db.add(exp)

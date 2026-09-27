@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, Float, Integer, DateTime, ForeignKey, JSON, Text
+from sqlalchemy import Column, String, Float, Integer, DateTime, ForeignKey, JSON, Text, UniqueConstraint
 from sqlalchemy.orm import relationship
 from app.core.database import Base
 
@@ -33,12 +33,18 @@ class BehaviorPattern(Base):
     sample_size = Column(Integer, default=1)
     first_detected = Column(DateTime, default=datetime.utcnow, nullable=False)
     last_detected = Column(DateTime, default=datetime.utcnow, nullable=False)
+    last_evaluated_at = Column(DateTime, nullable=True)
     status = Column(String(30), default="active")  # "active", "improving", "weakening", "inactive", "resolved", "archived"
     supporting_metrics = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
+    __table_args__ = (
+        UniqueConstraint("user_id", "pattern_type", name="uq_behavior_patterns_user_pattern_type"),
+    )
+
     # Relationships
     user = relationship("User", back_populates="behavior_patterns")
+    experiments = relationship("Experiment", back_populates="pattern")
 
 
 DEFAULT_PROFILE_VISIBILITY = {

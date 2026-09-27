@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, ConfigDict
 
 
@@ -14,6 +14,7 @@ class ExperimentBase(BaseModel):
     baseline_value: Optional[float] = None
     target_value: Optional[float] = None
     pattern_id: Optional[str] = None
+    pattern_snapshot: Optional[Dict[str, Any]] = None
 
 
 class ExperimentCreate(ExperimentBase):

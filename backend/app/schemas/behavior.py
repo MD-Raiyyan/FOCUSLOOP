@@ -26,6 +26,7 @@ class PatternResponse(BaseModel):
     sample_size: int
     first_detected: datetime
     last_detected: datetime
+    last_evaluated_at: Optional[datetime] = None
     status: str
     supporting_metrics: Optional[Dict[str, Any]] = None
     created_at: datetime

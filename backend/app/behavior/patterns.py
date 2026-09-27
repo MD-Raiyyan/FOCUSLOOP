@@ -2,6 +2,7 @@ import uuid
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 from app.models.behavior import BehaviorPattern
 from app.models.checkin import TaskCheckin
 from app.models.task import Task
@@ -75,6 +76,26 @@ class PatternDetector:
 
         self.db.commit()
         return detected
+
+    def refresh_patterns(self) -> List[BehaviorPattern]:
+        """
+        Explicit service function: recalculates patterns from raw evidence
+        and updates/persists evolving state in the database.
+        """
+        return self.detect_and_update_patterns()
+
+    def get_persisted_patterns(self, status: Optional[str] = None) -> List[BehaviorPattern]:
+        """
+        Pure read operation: retrieves current persisted patterns from database
+        without triggering pattern engine recalculation or modifying timestamps.
+        """
+        query = (
+            self.db.query(BehaviorPattern)
+            .filter(BehaviorPattern.user_id == self.user_id)
+        )
+        if status:
+            query = query.filter(BehaviorPattern.status == status)
+        return query.order_by(BehaviorPattern.created_at.asc()).all()
 
     def _get_existing_pattern(self, pattern_type: str) -> Optional[BehaviorPattern]:
         """Retrieves existing persisted pattern for this user and type."""
@@ -226,6 +247,8 @@ class PatternDetector:
                     "confidence": confidence,
                     "sample_size": sample_size,
                     "insufficient_evidence": True,
+                    "first_observed_date": min(distinct_dates) if distinct_dates else (existing.supporting_metrics or {}).get("first_observed_date"),
+                    "last_observed_date": max(distinct_dates) if distinct_dates else (existing.supporting_metrics or {}).get("last_observed_date"),
                     "time_series": daily_delay_series,
                     "context_comparison": self._build_tod_context_comparison(morning_all, afternoon_all, evening_all),
                 },
@@ -491,6 +514,8 @@ class PatternDetector:
                     "confidence": confidence,
                     "sample_size": sample_size,
                     "insufficient_evidence": True,
+                    "first_observed_date": min(distinct_dates) if distinct_dates else (existing.supporting_metrics or {}).get("first_observed_date"),
+                    "last_observed_date": max(distinct_dates) if distinct_dates else (existing.supporting_metrics or {}).get("last_observed_date"),
                     "time_series": daily_series,
                 },
             )
@@ -735,6 +760,8 @@ class PatternDetector:
                     "confidence": confidence,
                     "sample_size": sample_size,
                     "insufficient_evidence": True,
+                    "first_observed_date": min(distinct_dates) if distinct_dates else (existing.supporting_metrics or {}).get("first_observed_date"),
+                    "last_observed_date": max(distinct_dates) if distinct_dates else (existing.supporting_metrics or {}).get("last_observed_date"),
                     "time_series": daily_series,
                 },
             )
@@ -985,6 +1012,8 @@ class PatternDetector:
                     "insufficient_evidence": False,
                     "insufficient_current_evidence": True,
                     "lifecycle_category": "insufficient_current_evidence",
+                    "first_observed_date": (existing.supporting_metrics or {}).get("first_observed_date"),
+                    "last_observed_date": (existing.supporting_metrics or {}).get("last_observed_date"),
                     "trend": "inactive",
                     "time_series": [],
                 },
@@ -1044,6 +1073,8 @@ class PatternDetector:
                     "insufficient_evidence": True,
                     "insufficient_current_evidence": True,
                     "lifecycle_category": "insufficient_current_evidence",
+                    "first_observed_date": min(distinct_dates) if distinct_dates else (existing.supporting_metrics or {}).get("first_observed_date"),
+                    "last_observed_date": max(distinct_dates) if distinct_dates else (existing.supporting_metrics or {}).get("last_observed_date"),
                     "trend": "inactive",
                     "time_series": daily_series,
                 },
@@ -1304,8 +1335,19 @@ class PatternDetector:
         sample_size: int,
         status: str,
         supporting_metrics: Dict[str, Any],
+        latest_evidence_time: Optional[datetime] = None,
     ) -> BehaviorPattern:
-        """Finds existing pattern of same type or creates a new one, keeping ID stable."""
+        """
+        Finds existing pattern of same type or creates a new one, keeping ID stable.
+        Enforces:
+        1. Stable pattern ID across all lifecycle state transitions.
+        2. Pattern rows are never deleted.
+        3. first_detected remains the original detection timestamp.
+        4. last_detected advances ONLY when actual material evidence changes.
+        5. last_evaluated_at updates on every detector evaluation/recalculation.
+        6. Concurrency safety: handles race conditions against UNIQUE(user_id, pattern_type).
+        """
+        now = datetime.utcnow()
         existing = (
             self.db.query(BehaviorPattern)
             .filter(
@@ -1315,34 +1357,93 @@ class PatternDetector:
             .first()
         )
 
-        now = datetime.utcnow()
         if existing:
             pat_id = existing.id
             supporting_metrics["pattern_id"] = pat_id
             existing.title = title
             existing.description = description
             existing.confidence = confidence
-            existing.sample_size = sample_size
             existing.status = status
-            existing.last_detected = now
+            existing.last_evaluated_at = now
+
+            # Check if supporting evidence has materially changed
+            new_last_observed = supporting_metrics.get("last_observed_date")
+            old_last_observed = (existing.supporting_metrics or {}).get("last_observed_date") if existing.supporting_metrics else None
+
+            if latest_evidence_time and (existing.last_detected is None or latest_evidence_time > existing.last_detected):
+                existing.last_detected = latest_evidence_time
+            elif new_last_observed and (old_last_observed is None or str(new_last_observed) > str(old_last_observed)):
+                try:
+                    ev_dt = datetime.strptime(str(new_last_observed)[:10], "%Y-%m-%d")
+                    existing.last_detected = now if ev_dt.date() >= now.date() else ev_dt
+                except Exception:
+                    existing.last_detected = now
+            elif sample_size > (existing.sample_size or 0):
+                if new_last_observed:
+                    try:
+                        ev_dt = datetime.strptime(str(new_last_observed)[:10], "%Y-%m-%d")
+                        existing.last_detected = now if ev_dt.date() >= now.date() else ev_dt
+                    except Exception:
+                        existing.last_detected = now
+                else:
+                    existing.last_detected = now
+
+            existing.sample_size = sample_size
             existing.supporting_metrics = dict(supporting_metrics)
             return existing
-        else:
-            pat_id = str(uuid.uuid4())
-            supporting_metrics["pattern_id"] = pat_id
-            new_p = BehaviorPattern(
-                id=pat_id,
-                user_id=self.user_id,
-                pattern_type=pattern_type,
-                title=title,
-                description=description,
-                confidence=confidence,
-                sample_size=sample_size,
-                first_detected=now,
-                last_detected=now,
-                status=status,
-                supporting_metrics=dict(supporting_metrics),
+
+        # Attempt to insert new pattern with savepoint to handle concurrency
+        pat_id = str(uuid.uuid4())
+        supporting_metrics["pattern_id"] = pat_id
+
+        initial_last_detected = now
+        if latest_evidence_time:
+            initial_last_detected = latest_evidence_time
+        elif supporting_metrics.get("last_observed_date"):
+            try:
+                ev_dt = datetime.strptime(str(supporting_metrics["last_observed_date"])[:10], "%Y-%m-%d")
+                initial_last_detected = now if ev_dt.date() >= now.date() else ev_dt
+            except Exception:
+                initial_last_detected = now
+
+        try:
+            with self.db.begin_nested():
+                new_p = BehaviorPattern(
+                    id=pat_id,
+                    user_id=self.user_id,
+                    pattern_type=pattern_type,
+                    title=title,
+                    description=description,
+                    confidence=confidence,
+                    sample_size=sample_size,
+                    first_detected=now,
+                    last_detected=initial_last_detected,
+                    last_evaluated_at=now,
+                    status=status,
+                    supporting_metrics=dict(supporting_metrics),
+                )
+                self.db.add(new_p)
+                self.db.flush()
+                return new_p
+        except IntegrityError:
+            # Concurrent insert detected; re-query existing row and update
+            existing = (
+                self.db.query(BehaviorPattern)
+                .filter(
+                    BehaviorPattern.user_id == self.user_id,
+                    BehaviorPattern.pattern_type == pattern_type,
+                )
+                .first()
             )
-            self.db.add(new_p)
-            self.db.flush()
-            return new_p
+            if existing:
+                pat_id = existing.id
+                supporting_metrics["pattern_id"] = pat_id
+                existing.title = title
+                existing.description = description
+                existing.confidence = confidence
+                existing.sample_size = sample_size
+                existing.status = status
+                existing.last_evaluated_at = now
+                existing.supporting_metrics = dict(supporting_metrics)
+                return existing
+            raise
