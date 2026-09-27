@@ -10,20 +10,20 @@ logger = logging.getLogger(__name__)
 
 class LLMService:
     """
-    Handles communication with Gemini LLM API, with strict evidence grounding
+    Handles communication with Groq LLM API, with strict evidence grounding
     and deterministic, compassionate fallbacks.
     """
 
     def __init__(self):
-        self.api_key = settings.GEMINI_API_KEY
-        self.model_name = settings.GEMINI_MODEL
+        self.api_key = settings.GROQ_API_KEY
+        self.model_name = settings.GROQ_MODEL
         self.client = None
         if self.api_key:
             try:
-                from google import genai
-                self.client = genai.Client(api_key=self.api_key)
+                from groq import Groq
+                self.client = Groq(api_key=self.api_key)
             except Exception as e:
-                logger.warning(f"Could not initialize Gemini Client: {e}")
+                logger.warning(f"Could not initialize Groq Client: {e}")
 
     def _normalize_context(self, context: Union[Dict[str, Any], AIContext]) -> Dict[str, Any]:
         """Converts AIContext or dictionary to a clean serializable dict."""
@@ -47,20 +47,22 @@ class LLMService:
             f"experiment_count={len(context_dict.get('experiments', []))}"
         )
 
-        prompt = (
-            f"{SYSTEM_EXPLAINER_PROMPT}\n\n"
-            f"VERIFIED USER BEHAVIORAL EVIDENCE (STRUCTURED CONTEXT):\n"
-            f"{json.dumps(context_dict, indent=2)}\n\n"
-            f"USER QUERY: {question or 'Explain my productivity patterns and suggest a micro-experiment to test.'}"
-        )
-
         if self.client:
             try:
-                response = self.client.models.generate_content(
-                    model=self.model_name,
-                    contents=prompt,
+                system_content = (
+                    f"{SYSTEM_EXPLAINER_PROMPT}\n\n"
+                    f"VERIFIED USER BEHAVIORAL EVIDENCE (STRUCTURED CONTEXT):\n"
+                    f"{json.dumps(context_dict, indent=2)}"
                 )
-                text = response.text or ""
+                user_content = question or "Explain my productivity patterns and suggest a micro-experiment to test."
+                response = self.client.chat.completions.create(
+                    model=self.model_name,
+                    messages=[
+                        {"role": "system", "content": system_content},
+                        {"role": "user", "content": user_content},
+                    ],
+                )
+                text = response.choices[0].message.content or ""
                 return {
                     "title": "Behavioral Insight & Next Experiment",
                     "explanation": text,
@@ -69,7 +71,7 @@ class LLMService:
                     "tone": "compassionate_analytical",
                 }
             except Exception as e:
-                logger.error(f"Error calling Gemini API: {e}")
+                logger.error(f"Error calling Groq API: {e}")
 
         # Deterministic zero-shame, question-relevant fallback when offline or no API key provided
         return self._generate_fallback_explanation(context_dict, question)
@@ -90,22 +92,26 @@ class LLMService:
 
         if self.client:
             try:
-                convo_text = "\n".join([f"{m['role'].upper()}: {m['content']}" for m in messages])
-                full_prompt = (
+                system_content = (
                     f"{CHAT_COMPANION_PROMPT}\n\n"
                     f"Verified User Evidence (Structured AI Context):\n"
-                    f"{json.dumps(context_dict, indent=2)}\n\n"
-                    f"Recent Conversation:\n{convo_text}\n\n"
-                    f"ASSISTANT:"
+                    f"{json.dumps(context_dict, indent=2)}"
                 )
-                response = self.client.models.generate_content(
+                api_messages = [{"role": "system", "content": system_content}]
+                for m in messages:
+                    api_messages.append({
+                        "role": m.get("role", "user"),
+                        "content": m.get("content", ""),
+                    })
+
+                response = self.client.chat.completions.create(
                     model=self.model_name,
-                    contents=full_prompt,
+                    messages=api_messages,
                 )
-                if response.text:
-                    return response.text.strip()
+                if response.choices and response.choices[0].message.content:
+                    return response.choices[0].message.content.strip()
             except Exception as e:
-                logger.error(f"Error in chat reply from Gemini: {e}")
+                logger.error(f"Error in chat reply from Groq: {e}")
 
         # Empathetic, grounded local fallback
         return self._generate_fallback_chat_reply(messages, context_dict)

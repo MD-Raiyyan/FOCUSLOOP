@@ -9,7 +9,11 @@ import {
   SafeAreaView,
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
+  Keyboard,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Header } from '@/components/Header';
@@ -18,6 +22,7 @@ import { aiService } from '@/services/ai';
 import { ConversationResponse, MessageResponse, AIExplanationResponse } from '@/types/chat';
 
 export default function AICoachScreen() {
+  const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ initialPrompt?: string }>();
   const [conversation, setConversation] = useState<ConversationResponse | null>(null);
   const [messages, setMessages] = useState<MessageResponse[]>([]);
@@ -25,8 +30,37 @@ export default function AICoachScreen() {
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [isSending, setIsSending] = useState(false);
   const [activeExplanation, setActiveExplanation] = useState<AIExplanationResponse | null>(null);
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+
+  // Tab bar height: FocusLoop uses BottomDock (height: 64, offset: 24 iOS / 16 Android).
+  // Dynamically account for bottom safe area insets on modern edge-to-edge devices.
+  const bottomTabBarHeight = Math.max(
+    Platform.OS === 'ios' ? 88 : 80,
+    64 + (insets.bottom || 0)
+  );
 
   const scrollRef = useRef<ScrollView | null>(null);
+
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+    const showSub = Keyboard.addListener(showEvent, () => {
+      setIsKeyboardVisible(true);
+      setTimeout(() => {
+        scrollRef.current?.scrollToEnd({ animated: true });
+      }, 50);
+    });
+
+    const hideSub = Keyboard.addListener(hideEvent, () => {
+      setIsKeyboardVisible(false);
+    });
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   useEffect(() => {
     async function loadConversation() {
@@ -59,6 +93,9 @@ export default function AICoachScreen() {
     setMessages((prev) => [...prev, tempUserMsg]);
     setInputText('');
     setIsSending(true);
+    setTimeout(() => {
+      scrollRef.current?.scrollToEnd({ animated: true });
+    }, 50);
 
     try {
       const assistantReply = await aiService.sendMessage(conversation.id, textToSend);
@@ -91,14 +128,19 @@ export default function AICoachScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <Header title="AI Coach" />
-
-      <ScrollView
-        ref={scrollRef}
-        style={styles.container}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
+      <KeyboardAvoidingView
+        style={styles.keyboardAvoid}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
+        <Header title="AI Coach" />
+
+        <ScrollView
+          ref={scrollRef}
+          style={styles.container}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
         {/* Top Context & Grounded Status Banner */}
         <View style={styles.privacyBanner}>
           <View style={styles.privacyHeaderRow}>
@@ -235,34 +277,42 @@ export default function AICoachScreen() {
             </View>
           )}
         </View>
-
-        {/* Input Bar */}
-        <View style={styles.inputBarContainer}>
-          <View style={styles.inputInner}>
-            <Ionicons name="sparkles" size={18} color={Colors.primary} />
-            <TextInput
-              style={styles.textInput}
-              placeholder="Ask about patterns, habits, or focus..."
-              placeholderTextColor={Colors.textMuted}
-              value={inputText}
-              onChangeText={setInputText}
-              onSubmitEditing={handleSend}
-            />
-            <TouchableOpacity
-              style={[styles.sendBtn, (!inputText.trim() || isSending) && { opacity: 0.5 }]}
-              onPress={handleSend}
-              disabled={!inputText.trim() || isSending}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="arrow-up" size={18} color="#FFFFFF" />
-            </TouchableOpacity>
-          </View>
-          <Text style={styles.inputFooterText}>
-            🔒 Answers strictly grounded in your deterministic backend data.
-          </Text>
-        </View>
       </ScrollView>
-    </SafeAreaView>
+
+      {/* Input Bar */}
+      <View
+        style={[
+          styles.inputBarContainer,
+          {
+            marginBottom: isKeyboardVisible ? 0 : bottomTabBarHeight + 8,
+          },
+        ]}
+      >
+        <View style={styles.inputInner}>
+          <Ionicons name="sparkles" size={18} color={Colors.primary} />
+          <TextInput
+            style={styles.textInput}
+            placeholder="Ask about patterns, habits, or focus..."
+            placeholderTextColor={Colors.textMuted}
+            value={inputText}
+            onChangeText={setInputText}
+            onSubmitEditing={handleSend}
+          />
+          <TouchableOpacity
+            style={[styles.sendBtn, (!inputText.trim() || isSending) && { opacity: 0.5 }]}
+            onPress={handleSend}
+            disabled={!inputText.trim() || isSending}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="arrow-up" size={18} color="#FFFFFF" />
+          </TouchableOpacity>
+        </View>
+        <Text style={styles.inputFooterText}>
+          🔒 Answers strictly grounded in your deterministic backend data.
+        </Text>
+      </View>
+    </KeyboardAvoidingView>
+  </SafeAreaView>
   );
 }
 
@@ -271,13 +321,16 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
+  keyboardAvoid: {
+    flex: 1,
+  },
   container: {
     flex: 1,
   },
   scrollContent: {
     paddingHorizontal: 16,
     paddingTop: 12,
-    paddingBottom: 100,
+    paddingBottom: 20,
   },
   privacyBanner: {
     backgroundColor: Colors.surfaceContainerLowest,
@@ -519,7 +572,12 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   inputBarContainer: {
-    marginTop: 12,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: Platform.OS === 'ios' ? 8 : 12,
+    backgroundColor: Colors.background,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Colors.neutralBorder,
   },
   inputInner: {
     backgroundColor: Colors.surfaceContainerLowest,

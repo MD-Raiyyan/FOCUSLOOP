@@ -13,7 +13,9 @@ class Settings(BaseSettings):
     # Database
     DATABASE_URL: str = "sqlite:///./focusloop.db"
 
-    # AI / LLM
+    # AI / LLM (Groq)
+    GROQ_API_KEY: str = ""
+    GROQ_MODEL: str = "openai/gpt-oss-120b"
     GEMINI_API_KEY: str = ""
     GEMINI_MODEL: str = "gemini-1.5-flash"
 
