@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/theme';
 
@@ -14,6 +15,9 @@ export const Header: React.FC<HeaderProps> = ({
   onNotificationPress,
   onProfilePress,
 }) => {
+  const router = useRouter();
+  const handleProfilePress = onProfilePress || (() => router.push('/profile' as any));
+
   return (
     <View style={styles.container}>
       <View style={styles.brandRow}>
@@ -36,7 +40,7 @@ export const Header: React.FC<HeaderProps> = ({
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.profileAvatar}
-          onPress={onProfilePress}
+          onPress={handleProfilePress}
           activeOpacity={0.7}
         >
           <Ionicons name="person" size={16} color={Colors.onPrimary} />

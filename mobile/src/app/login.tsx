@@ -9,29 +9,50 @@ import {
   Image,
   KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/theme';
+import { useAuth } from '@/hooks/useAuth';
 
 export default function LoginScreen() {
   const router = useRouter();
+  const { login } = useAuth();
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Temporary mock login — no credentials verified, just navigates to the app
-  const handleLogin = () => {
-    if (email.length > 0 && password.length > 0) {
-      router.replace('/(tabs)');
+  const handleLogin = async () => {
+    setErrorMessage(null);
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail || !password) {
+      setErrorMessage('Please enter your email or username and password.');
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      const loggedInUser = await login({ email: trimmedEmail, password });
+      if (loggedInUser && !loggedInUser.onboarding_completed) {
+        router.replace('/onboarding' as any);
+      } else {
+        router.replace('/(tabs)');
+      }
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Invalid credentials. Please try again.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  // Temporary Google login — navigates to app directly
-  const handleGoogleLogin = () => {
-    router.replace('/(tabs)');
+  const handleGoogleLoginNotice = () => {
+    setErrorMessage('Google OAuth is not enabled on this backend yet. Please log in with your email and password.');
   };
 
   return (
@@ -63,6 +84,14 @@ export default function LoginScreen() {
           {/* ── Title & Subtitle ── */}
           <Text style={styles.title}>Welcome Back! 👋</Text>
           <Text style={styles.subtitle}>Log in to continue your focus journey.</Text>
+
+          {/* ── Error Banner ── */}
+          {errorMessage && (
+            <View style={styles.errorBox}>
+              <Ionicons name="alert-circle" size={18} color="#DC2626" />
+              <Text style={styles.errorText}>{errorMessage}</Text>
+            </View>
+          )}
 
           {/* ── Email Input ── */}
           <View style={styles.inputBox}>
@@ -127,12 +156,19 @@ export default function LoginScreen() {
 
           {/* ── Log In Button ── */}
           <TouchableOpacity
-            style={styles.loginBtn}
+            style={[styles.loginBtn, isSubmitting && styles.btnDisabled]}
             onPress={handleLogin}
+            disabled={isSubmitting}
             activeOpacity={0.85}
           >
-            <Ionicons name="arrow-forward" size={20} color="#FFFFFF" />
-            <Text style={styles.loginBtnText}>Log In</Text>
+            {isSubmitting ? (
+              <ActivityIndicator color="#FFFFFF" size="small" />
+            ) : (
+              <>
+                <Ionicons name="arrow-forward" size={20} color="#FFFFFF" />
+                <Text style={styles.loginBtnText}>Log In</Text>
+              </>
+            )}
           </TouchableOpacity>
 
           {/* ── OR Divider ── */}
@@ -142,23 +178,22 @@ export default function LoginScreen() {
             <View style={styles.dividerLine} />
           </View>
 
-          {/* ── Continue with Google ── */}
+          {/* ── Continue with Google (Future capability notice) ── */}
           <TouchableOpacity
             style={styles.googleBtn}
-            onPress={handleGoogleLogin}
+            onPress={handleGoogleLoginNotice}
             activeOpacity={0.85}
           >
-            {/* Google G icon using colored letters as substitute */}
             <View style={styles.googleIconContainer}>
               <Text style={styles.googleG}>G</Text>
             </View>
-            <Text style={styles.googleBtnText}>Continue with Google</Text>
+            <Text style={styles.googleBtnText}>Continue with Google (Coming Soon)</Text>
           </TouchableOpacity>
 
           {/* ── Sign Up Footer ── */}
           <View style={styles.signUpRow}>
             <Text style={styles.signUpPrompt}>Don't have an account?</Text>
-            <TouchableOpacity activeOpacity={0.7}>
+            <TouchableOpacity onPress={() => router.push('/register' as any)} activeOpacity={0.7}>
               <Text style={styles.signUpLink}> Sign Up</Text>
             </TouchableOpacity>
           </View>
@@ -183,8 +218,6 @@ const styles = StyleSheet.create({
     paddingBottom: 32,
     alignItems: 'center',
   },
-
-  // Brand
   brandRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -197,8 +230,6 @@ const styles = StyleSheet.create({
     color: Colors.primary,
     letterSpacing: 2.5,
   },
-
-  // Illustration
   illustrationWrapper: {
     width: '100%',
     height: 200,
@@ -213,8 +244,6 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-
-  // Title
   title: {
     fontSize: 26,
     fontWeight: '800',
@@ -228,8 +257,25 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     textAlign: 'center',
   },
-
-  // Input
+  errorBox: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#FEE2E2',
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginBottom: 16,
+  },
+  errorText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#B91C1C',
+    fontWeight: '500',
+  },
   inputBox: {
     width: '100%',
     height: 54,
@@ -250,8 +296,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#1A1848',
   },
-
-  // Options row
   optionsRow: {
     width: '100%',
     flexDirection: 'row',
@@ -289,8 +333,6 @@ const styles = StyleSheet.create({
     color: Colors.primaryContainer,
     fontWeight: '600',
   },
-
-  // Login button
   loginBtn: {
     width: '100%',
     height: 54,
@@ -306,13 +348,14 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 5,
   },
+  btnDisabled: {
+    opacity: 0.65,
+  },
   loginBtnText: {
     fontSize: 16,
     fontWeight: '700',
     color: '#FFFFFF',
   },
-
-  // Divider
   divider: {
     width: '100%',
     flexDirection: 'row',
@@ -331,8 +374,6 @@ const styles = StyleSheet.create({
     marginHorizontal: 12,
     letterSpacing: 1,
   },
-
-  // Google button
   googleBtn: {
     width: '100%',
     height: 54,
@@ -362,12 +403,10 @@ const styles = StyleSheet.create({
     color: '#4285F4',
   },
   googleBtnText: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '600',
-    color: '#1A1848',
+    color: '#64748B',
   },
-
-  // Sign up
   signUpRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -383,8 +422,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: Colors.primaryContainer,
   },
-
-  // Tagline
   tagline: {
     fontSize: 11,
     fontWeight: '600',

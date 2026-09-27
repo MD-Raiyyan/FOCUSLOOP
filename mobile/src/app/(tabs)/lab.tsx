@@ -6,17 +6,74 @@ import {
   ScrollView,
   TouchableOpacity,
   SafeAreaView,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Header } from '@/components/Header';
 import { Colors } from '@/constants/theme';
+import { useExperiments } from '@/hooks/useExperiments';
+import { ExperimentResultResponse } from '@/types/experiments';
 
 export default function LabScreen() {
-  const [isCheckedIn, setIsCheckedIn] = useState(false);
+  const {
+    experiments,
+    isLoading,
+    error,
+    refreshExperiments,
+    suggestExperiment,
+    startExperiment,
+    evaluateExperiment,
+  } = useExperiments();
 
-  const handleCheckIn = () => {
-    setIsCheckedIn(true);
-    setTimeout(() => setIsCheckedIn(false), 2000);
+  const [isSuggesting, setIsSuggesting] = useState(false);
+  const [startingId, setStartingId] = useState<string | null>(null);
+  const [evaluatingId, setEvaluatingId] = useState<string | null>(null);
+  const [latestEvaluation, setLatestEvaluation] = useState<ExperimentResultResponse | null>(null);
+
+  const activeExperiment = experiments.find((exp) => exp.status === 'active') || null;
+
+  const handleSuggest = async () => {
+    try {
+      setIsSuggesting(true);
+      const updatedList = await suggestExperiment();
+      const newest = updatedList && updatedList.length > 0 ? updatedList[0] : null;
+      Alert.alert(
+        'Protocol Generated',
+        newest?.title
+          ? `"${newest.title}" created based on your behavior patterns.`
+          : 'New protocol suggestions generated based on your behavior patterns.'
+      );
+    } catch (err: any) {
+      Alert.alert('Suggestion Notice', err.message || 'Could not generate experiment suggestion.');
+    } finally {
+      setIsSuggesting(false);
+    }
+  };
+
+  const handleStart = async (id: string) => {
+    try {
+      setStartingId(id);
+      await startExperiment(id);
+      Alert.alert('Protocol Activated', 'Protocol is now active. Track your task check-ins during the observation window.');
+    } catch (err: any) {
+      Alert.alert('Activation Notice', err.message || 'Could not activate protocol.');
+    } finally {
+      setStartingId(null);
+    }
+  };
+
+  const handleEvaluate = async (id: string) => {
+    try {
+      setEvaluatingId(id);
+      const result = await evaluateExperiment(id);
+      setLatestEvaluation(result);
+      Alert.alert('Protocol Evaluated', result.result_summary || 'Evaluation completed successfully.');
+    } catch (err: any) {
+      Alert.alert('Evaluation Notice', err.message || 'Could not evaluate protocol.');
+    } finally {
+      setEvaluatingId(null);
+    }
   };
 
   return (
@@ -31,239 +88,226 @@ export default function LabScreen() {
         {/* Active Experiment Hero Banner */}
         <View style={styles.heroBanner}>
           <View style={styles.heroHeaderRow}>
-            <View style={styles.runningBadge}>
-              <View style={styles.pulseDot} />
-              <Text style={styles.runningText}>Running • Day 4 of 7</Text>
-            </View>
-            <View style={styles.labTag}>
-              <Text style={styles.labTagText}>Lab #04</Text>
-            </View>
-          </View>
-
-          <Text style={styles.heroTitle}>10-Minute Micro-Start Buffer</Text>
-          <Text style={styles.heroSub}>Behavioral nudge testing inertia breaker algorithms</Text>
-
-          {/* Progress Track */}
-          <View style={styles.progressSection}>
-            <View style={styles.progressTextRow}>
-              <Text style={styles.progressLabel}>Experiment Cycle</Text>
-              <Text style={styles.progressPercent}>57% completed</Text>
-            </View>
-            <View style={styles.trackBackground}>
-              <View style={[styles.trackFill, { width: '57%' }]} />
-            </View>
-          </View>
-
-          {/* Hypothesis Box */}
-          <View style={styles.hypothesisBox}>
-            <View style={styles.boxHeaderRow}>
-              <Ionicons name="bulb-outline" size={14} color={Colors.primary} />
-              <Text style={styles.boxHeaderText}>CORE HYPOTHESIS</Text>
-            </View>
-            <Text style={styles.hypothesisText}>
-              Committing to just 10 minutes of low-stakes drafting on hard tasks reduces start delay by 40%.
-            </Text>
-          </View>
-
-          {/* Trigger Rule Box */}
-          <View style={styles.triggerBox}>
-            <Ionicons name="flash-outline" size={16} color={Colors.tertiary} />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.triggerTag}>TRIGGER RULE</Text>
-              <Text style={styles.triggerText}>
-                Activates automatically when afternoon initiation latency exceeds 20 minutes.
+            <View
+              style={[
+                styles.runningBadge,
+                !activeExperiment && { backgroundColor: Colors.surfaceContainer },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.runningText,
+                  !activeExperiment && { color: Colors.textSubtle },
+                ]}
+              >
+                {activeExperiment ? `Status: ${(activeExperiment.status || 'active').toUpperCase()}` : 'No Active Protocol'}
               </Text>
             </View>
+            <View style={styles.labTag}>
+              <Text style={styles.labTagText}>Lab</Text>
+            </View>
           </View>
+
+          {isLoading ? (
+            <View style={styles.loadingBox}>
+              <ActivityIndicator color={Colors.primary} size="small" />
+              <Text style={styles.loadingText}>Loading protocol experiments...</Text>
+            </View>
+          ) : activeExperiment ? (
+            <>
+              <Text style={styles.heroTitle}>{activeExperiment.title}</Text>
+              <Text style={styles.heroSub}>{activeExperiment.description}</Text>
+
+              {/* Hypothesis Box */}
+              <View style={styles.hypothesisBox}>
+                <View style={styles.boxHeaderRow}>
+                  <Ionicons name="bulb-outline" size={14} color={Colors.primary} />
+                  <Text style={styles.boxHeaderText}>CORE HYPOTHESIS</Text>
+                </View>
+                <Text style={styles.hypothesisText}>{activeExperiment.hypothesis}</Text>
+              </View>
+
+              {/* Target Metric Box */}
+              <View style={styles.triggerBox}>
+                <Ionicons name="flash-outline" size={16} color={Colors.tertiary} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.triggerTag}>TARGET METRIC</Text>
+                  <Text style={styles.triggerText}>
+                    {activeExperiment.target_metric}: Target {activeExperiment.target_value ?? '—'} (Baseline: {activeExperiment.baseline_value ?? '—'})
+                  </Text>
+                </View>
+              </View>
+
+              {/* Evaluate Button */}
+              <TouchableOpacity
+                style={styles.evaluateBtn}
+                onPress={() => handleEvaluate(activeExperiment.id)}
+                disabled={evaluatingId === activeExperiment.id}
+              >
+                {evaluatingId === activeExperiment.id ? (
+                  <ActivityIndicator color="#FFFFFF" size="small" />
+                ) : (
+                  <>
+                    <Ionicons name="analytics" size={16} color="#FFFFFF" />
+                    <Text style={styles.evaluateBtnText}>Evaluate Protocol Outcome</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              <Text style={styles.heroTitle}>No Active Experiment</Text>
+              <Text style={styles.heroSub}>
+                Ask the FocusLoop engine to suggest an evidence-based intervention from your behavior patterns.
+              </Text>
+
+              <TouchableOpacity
+                style={styles.suggestBtn}
+                onPress={handleSuggest}
+                disabled={isSuggesting}
+              >
+                {isSuggesting ? (
+                  <ActivityIndicator color="#FFFFFF" size="small" />
+                ) : (
+                  <>
+                    <Ionicons name="sparkles" size={16} color="#FFFFFF" />
+                    <Text style={styles.suggestBtnText}>Suggest Behavioral Protocol</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </>
+          )}
         </View>
 
-        {/* Empirical Results Section */}
+        {/* Latest Evaluation Result */}
+        {latestEvaluation && (
+          <View style={styles.evaluationCard}>
+            <View style={styles.evalHeaderRow}>
+              <View style={styles.evalIconBox}>
+                <Ionicons name="ribbon-outline" size={18} color={Colors.secondary} />
+              </View>
+              <Text style={styles.evalTitle}>Latest Evaluation Result</Text>
+            </View>
+            <Text style={styles.evalSummary}>{latestEvaluation.result_summary}</Text>
+            <View style={styles.evalMetricsRow}>
+              <View style={styles.evalMetricTile}>
+                <Text style={styles.evalMetricLabel}>Before</Text>
+                <Text style={styles.evalMetricVal}>{latestEvaluation.before_value}</Text>
+              </View>
+              <View style={styles.evalMetricTile}>
+                <Text style={styles.evalMetricLabel}>After</Text>
+                <Text style={styles.evalMetricVal}>{latestEvaluation.after_value}</Text>
+              </View>
+              <View style={styles.evalMetricTile}>
+                <Text style={styles.evalMetricLabel}>Change</Text>
+                <Text style={[styles.evalMetricVal, { color: Colors.secondary }]}>
+                  {latestEvaluation.percent_change != null ? `${latestEvaluation.percent_change.toFixed(1)}%` : `${latestEvaluation.change_value}`}
+                </Text>
+              </View>
+            </View>
+            <Text style={styles.evalConclusion}>Conclusion: {latestEvaluation.conclusion}</Text>
+          </View>
+        )}
+
+        {/* Empirical Results / All Protocols Section */}
         <View style={styles.sectionHeader}>
           <View style={styles.sectionTitleRow}>
             <Ionicons name="analytics-outline" size={18} color={Colors.primary} />
-            <Text style={styles.sectionTitle}>Empirical Results So Far</Text>
+            <Text style={styles.sectionTitle}>Behavioral Protocols ({experiments.length})</Text>
           </View>
-          <View style={styles.confidenceBadge}>
-            <Text style={styles.confidenceText}>High Confidence (86%)</Text>
-          </View>
-        </View>
-
-        {/* Comparison Tiles */}
-        <View style={styles.tilesGrid}>
-          {/* Baseline Tile */}
-          <View style={styles.tile}>
-            <View style={styles.tileHeader}>
-              <Text style={styles.tileLabel}>HISTORICAL</Text>
-              <View style={styles.tileIconCircle}>
-                <Ionicons name="time-outline" size={12} color={Colors.textSubtle} />
-              </View>
-            </View>
-            <View style={styles.tileMetricRow}>
-              <Text style={styles.tileMetricSubtle}>38</Text>
-              <Text style={styles.unitText}>m</Text>
-            </View>
-            <Text style={styles.tileSub}>Baseline avg latency</Text>
-          </View>
-
-          {/* Current Protocol Tile */}
-          <View style={[styles.tile, { backgroundColor: Colors.surfaceTintMint }]}>
-            <View style={styles.tileHeader}>
-              <Text style={[styles.tileLabel, { color: Colors.secondary }]}>CURRENT</Text>
-              <View style={[styles.tileIconCircle, { backgroundColor: Colors.secondaryContainer }]}>
-                <Ionicons name="trending-down" size={12} color={Colors.secondary} />
-              </View>
-            </View>
-            <View style={styles.tileMetricRow}>
-              <Text style={[styles.tileMetricSubtle, { color: Colors.secondary }]}>16</Text>
-              <Text style={[styles.unitText, { color: Colors.secondary }]}>m</Text>
-            </View>
-            <Text style={[styles.tileSub, { color: Colors.secondary, fontWeight: '700' }]}>
-              ↓ -57% start delay!
-            </Text>
-          </View>
-        </View>
-
-        {/* Trend Step Chart Card */}
-        <View style={styles.chartCard}>
-          <View style={styles.tileHeader}>
-            <Text style={styles.tileLabel}>INITIATION FRICTION TREND</Text>
-            <Text style={[styles.confidenceText, { color: Colors.secondary }]}>Consistently dropping</Text>
-          </View>
-
-          <View style={styles.chartBarsRow}>
-            {/* Step 1: Baseline */}
-            <View style={styles.chartBarCol}>
-              <Text style={styles.barValue}>38m</Text>
-              <View style={[styles.barVisual, { height: 50, backgroundColor: Colors.surfaceVariant }]} />
-              <Text style={styles.barLabel}>Baseline</Text>
-            </View>
-
-            {/* Step 2: Day 2 */}
-            <View style={styles.chartBarCol}>
-              <Text style={[styles.barValue, { color: Colors.primary }]}>19m</Text>
-              <View style={[styles.barVisual, { height: 30, backgroundColor: Colors.primaryFixedDim }]} />
-              <Text style={styles.barLabel}>Day 2</Text>
-            </View>
-
-            {/* Step 3: Today */}
-            <View style={styles.chartBarCol}>
-              <Text style={[styles.barValue, { color: Colors.secondary, fontWeight: '700' }]}>12m</Text>
-              <View style={[styles.barVisual, { height: 18, backgroundColor: Colors.secondaryFixedDim }]} />
-              <Text style={[styles.barLabel, { color: Colors.textStrong, fontWeight: '600' }]}>Today</Text>
-            </View>
-          </View>
-
-          <View style={styles.chartFooter}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-              <View style={styles.greenDot} />
-              <Text style={styles.chartFooterText}>Statistical Significance reached</Text>
-            </View>
-            <TouchableOpacity>
-              <Text style={styles.fullChartLink}>Full Chart</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Recent Test Sessions List */}
-        <View style={styles.sectionHeader}>
-          <View style={styles.sectionTitleRow}>
-            <Ionicons name="flask-outline" size={18} color={Colors.primary} />
-            <Text style={styles.sectionTitle}>Recent Test Sessions</Text>
-          </View>
-          <Text style={styles.subTextRight}>3 recorded</Text>
-        </View>
-
-        <View style={styles.sessionsList}>
-          {/* Session 1 */}
-          <View style={styles.sessionCard}>
-            <View style={styles.sessionLeft}>
-              <View style={[styles.sessionIcon, { backgroundColor: Colors.surfaceTintViolet }]}>
-                <Ionicons name="document-text-outline" size={16} color={Colors.primary} />
-              </View>
-              <View>
-                <Text style={styles.sessionTitle}>Drafting System Spec</Text>
-                <Text style={styles.sessionMeta}>Today, 2:30 PM • 12m delay</Text>
-              </View>
-            </View>
-            <View style={styles.workedBadge}>
-              <Ionicons name="checkmark-circle" size={12} color={Colors.secondary} />
-              <Text style={styles.workedBadgeText}>Worked</Text>
-            </View>
-          </View>
-
-          {/* Session 2 */}
-          <View style={styles.sessionCard}>
-            <View style={styles.sessionLeft}>
-              <View style={[styles.sessionIcon, { backgroundColor: Colors.surfaceTintBlue }]}>
-                <Ionicons name="terminal-outline" size={16} color={Colors.accentIndigo} />
-              </View>
-              <View>
-                <Text style={styles.sessionTitle}>Code Review Sprint</Text>
-                <Text style={styles.sessionMeta}>Yesterday, 4:00 PM • 19m delay</Text>
-              </View>
-            </View>
-            <View style={styles.partialBadge}>
-              <Ionicons name="time-outline" size={12} color={Colors.tertiary} />
-              <Text style={styles.partialBadgeText}>Partial</Text>
-            </View>
-          </View>
-
-          {/* Session 3 */}
-          <View style={styles.sessionCard}>
-            <View style={styles.sessionLeft}>
-              <View style={[styles.sessionIcon, { backgroundColor: Colors.surfaceTintRose }]}>
-                <Ionicons name="server-outline" size={16} color={Colors.accentCoral} />
-              </View>
-              <View>
-                <Text style={styles.sessionTitle}>Database Migration</Text>
-                <Text style={styles.sessionMeta}>2 days ago • 15m delay</Text>
-              </View>
-            </View>
-            <View style={styles.workedBadge}>
-              <Ionicons name="checkmark-circle" size={12} color={Colors.secondary} />
-              <Text style={styles.workedBadgeText}>Worked</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* AI Coach Insights Box */}
-        <View style={styles.aiInsightBox}>
-          <View style={styles.aiAvatarCircle}>
-            <Ionicons name="sparkles" size={16} color={Colors.onPrimary} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.aiInsightHeader}>FocusLoop Engine Insight</Text>
-            <Text style={styles.aiInsightText}>
-              The 10-minute micro-start significantly lowers task resistance, especially following nights with {'<'}6h sleep. You are <Text style={styles.boldPrimary}>3 days away</Text> from concluding this experiment!
-            </Text>
-          </View>
-        </View>
-
-        {/* Action Buttons */}
-        <View style={styles.actionsGroup}>
-          <TouchableOpacity
-            style={[styles.btnPrimary, isCheckedIn && { backgroundColor: Colors.secondary }]}
-            onPress={handleCheckIn}
-            activeOpacity={0.8}
-          >
-            <Ionicons name={isCheckedIn ? 'checkmark-circle' : 'add-circle-outline'} size={18} color={Colors.onPrimary} />
-            <Text style={styles.btnPrimaryText}>
-              {isCheckedIn ? 'Check-in Logged!' : 'Log Protocol Check-in'}
-            </Text>
+          <TouchableOpacity onPress={handleSuggest} disabled={isSuggesting}>
+            <Text style={styles.linkText}>+ New Suggestion</Text>
           </TouchableOpacity>
-
-          <View style={styles.secondaryActionsRow}>
-            <TouchableOpacity style={styles.btnSecondary}>
-              <Ionicons name="options-outline" size={16} color={Colors.onSurfaceVariant} />
-              <Text style={styles.btnSecondaryText}>Adjust Rule</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.btnAdopt}>
-              <Ionicons name="ribbon-outline" size={16} color={Colors.secondary} />
-              <Text style={styles.btnAdoptText}>Conclude & Adopt</Text>
-            </TouchableOpacity>
-          </View>
         </View>
+
+        {experiments.length === 0 ? (
+          <View style={styles.emptyCard}>
+            <Ionicons name="flask-outline" size={28} color={Colors.textMuted} />
+            <Text style={styles.emptyTitle}>No Protocols Generated Yet</Text>
+            <Text style={styles.emptySubtitle}>
+              Tap "Suggest Behavioral Protocol" above to let the backend generate an experiment from your logged sessions.
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.experimentList}>
+            {experiments.map((exp) => (
+              <View key={exp.id} style={styles.expCard}>
+                <View style={styles.expCardTop}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.expItemTitle}>{exp.title}</Text>
+                    <Text style={styles.expItemType}>
+                      {exp.intervention_type} • Started: {exp.start_date}
+                    </Text>
+                  </View>
+                  <View
+                    style={[
+                      styles.statusPill,
+                      exp.status === 'completed' && { backgroundColor: Colors.surfaceTintMint },
+                      exp.status === 'active' && { backgroundColor: Colors.secondaryFixed },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.statusPillText,
+                        exp.status === 'completed' && { color: Colors.secondary, fontWeight: '700' },
+                        exp.status === 'active' && { color: Colors.onSecondaryFixed, fontWeight: '700' },
+                      ]}
+                    >
+                      {(exp.status || 'unknown').toUpperCase()}
+                    </Text>
+                  </View>
+                </View>
+                <Text style={styles.expItemDesc}>{exp.description}</Text>
+
+                {/* If results exist */}
+                {exp.results && exp.results.length > 0 && (
+                  <View style={styles.expResultSnippet}>
+                    <Ionicons name="checkmark-done" size={14} color={Colors.secondary} />
+                    <Text style={styles.expResultText}>
+                      {exp.results[0].conclusion.toUpperCase()}: {exp.results[0].metric_name} (
+                      {exp.results[0].change_value != null ? `Change: ${exp.results[0].change_value}` : 'No change data'})
+                    </Text>
+                  </View>
+                )}
+
+                {/* Actions based on experiment status */}
+                {exp.status === 'suggested' && (
+                  <TouchableOpacity
+                    style={styles.startBtn}
+                    onPress={() => handleStart(exp.id)}
+                    disabled={startingId === exp.id}
+                  >
+                    {startingId === exp.id ? (
+                      <ActivityIndicator color="#FFFFFF" size="small" />
+                    ) : (
+                      <>
+                        <Ionicons name="play" size={12} color="#FFFFFF" />
+                        <Text style={styles.startBtnText}>Start Protocol</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                )}
+
+                {exp.status === 'active' && (
+                  <TouchableOpacity
+                    style={styles.smallEvalBtn}
+                    onPress={() => handleEvaluate(exp.id)}
+                    disabled={evaluatingId === exp.id}
+                  >
+                    {evaluatingId === exp.id ? (
+                      <ActivityIndicator color={Colors.primary} size="small" />
+                    ) : (
+                      <>
+                        <Ionicons name="analytics" size={12} color={Colors.primary} />
+                        <Text style={styles.smallEvalText}>Evaluate</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                )}
+              </View>
+            ))}
+          </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -306,13 +350,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
-    gap: 6,
-  },
-  pulseDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: Colors.secondary,
   },
   runningText: {
     fontSize: 10,
@@ -338,40 +375,13 @@ const styles = StyleSheet.create({
   heroSub: {
     fontSize: 12,
     color: Colors.textSubtle,
-    marginTop: 2,
-  },
-  progressSection: {
-    marginTop: 12,
-    gap: 4,
-  },
-  progressTextRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  progressLabel: {
-    fontSize: 10,
-    color: Colors.textSubtle,
-  },
-  progressPercent: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: Colors.primary,
-  },
-  trackBackground: {
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: Colors.surfaceContainer,
-    overflow: 'hidden',
-  },
-  trackFill: {
-    height: '100%',
-    borderRadius: 4,
-    backgroundColor: Colors.primaryContainer,
+    marginTop: 4,
+    lineHeight: 18,
   },
   hypothesisBox: {
     backgroundColor: Colors.surfaceContainerLow,
     borderRadius: 12,
-    padding: 10,
+    padding: 12,
     marginTop: 12,
   },
   boxHeaderRow: {
@@ -389,7 +399,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.onSurface,
     marginTop: 4,
-    lineHeight: 16,
+    lineHeight: 18,
   },
   triggerBox: {
     backgroundColor: Colors.surfaceTintAmber,
@@ -412,6 +422,93 @@ const styles = StyleSheet.create({
     marginTop: 2,
     lineHeight: 16,
   },
+  evaluateBtn: {
+    backgroundColor: Colors.primary,
+    borderRadius: 14,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 14,
+  },
+  evaluateBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  suggestBtn: {
+    backgroundColor: Colors.primaryContainer,
+    borderRadius: 14,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 14,
+  },
+  suggestBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  evaluationCard: {
+    backgroundColor: Colors.surfaceTintMint,
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 20,
+    gap: 8,
+  },
+  evalHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  evalIconBox: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: Colors.neutralCard,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  evalTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.secondary,
+  },
+  evalSummary: {
+    fontSize: 12,
+    color: Colors.textStrong,
+    lineHeight: 16,
+  },
+  evalMetricsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginVertical: 4,
+  },
+  evalMetricTile: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    padding: 8,
+    alignItems: 'center',
+  },
+  evalMetricLabel: {
+    fontSize: 10,
+    color: Colors.textSubtle,
+  },
+  evalMetricVal: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.textStrong,
+    marginTop: 2,
+  },
+  evalConclusion: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: Colors.secondary,
+  },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -428,272 +525,131 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: Colors.textStrong,
   },
-  confidenceBadge: {
-    backgroundColor: Colors.surfaceTintMint,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 10,
-  },
-  confidenceText: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: Colors.secondary,
-  },
-  subTextRight: {
-    fontSize: 10,
-    color: Colors.textSubtle,
-  },
-  tilesGrid: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 12,
-  },
-  tile: {
-    flex: 1,
-    backgroundColor: Colors.neutralCard,
-    borderRadius: 12,
-    padding: 12,
-    justifyContent: 'space-between',
-    minHeight: 100,
-  },
-  tileHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  tileLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: Colors.textMuted,
-    letterSpacing: 0.5,
-  },
-  tileIconCircle: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: Colors.surfaceContainer,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  tileMetricRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    marginVertical: 4,
-  },
-  tileMetricSubtle: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: Colors.textSubtle,
-  },
-  unitText: {
+  linkText: {
     fontSize: 12,
-    color: Colors.textSubtle,
-    marginLeft: 2,
-  },
-  tileSub: {
-    fontSize: 10,
-    color: Colors.outline,
-  },
-  chartCard: {
-    backgroundColor: Colors.neutralCard,
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 20,
-  },
-  chartBarsRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-around',
-    height: 80,
-    marginTop: 12,
-  },
-  chartBarCol: {
-    alignItems: 'center',
-    gap: 4,
-  },
-  barValue: {
-    fontSize: 10,
-    color: Colors.textMuted,
-  },
-  barVisual: {
-    width: 28,
-    borderRadius: 6,
-  },
-  barLabel: {
-    fontSize: 10,
-    color: Colors.textSubtle,
-  },
-  chartFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 12,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: Colors.neutralBorder,
-  },
-  greenDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: Colors.secondary,
-  },
-  chartFooterText: {
-    fontSize: 10,
-    color: Colors.textSubtle,
-  },
-  fullChartLink: {
-    fontSize: 10,
     fontWeight: '600',
     color: Colors.primary,
   },
-  sessionsList: {
-    gap: 8,
-    marginBottom: 20,
-  },
-  sessionCard: {
+  emptyCard: {
     backgroundColor: Colors.neutralCard,
-    borderRadius: 12,
-    padding: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  sessionLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  sessionIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
+    borderRadius: 16,
+    padding: 24,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: Colors.neutralBorder,
+    borderStyle: 'dashed',
+    gap: 8,
   },
-  sessionTitle: {
-    fontSize: 13,
+  emptyTitle: {
+    fontSize: 14,
     fontWeight: '600',
     color: Colors.textStrong,
   },
-  sessionMeta: {
+  emptySubtitle: {
+    fontSize: 12,
+    color: Colors.textSubtle,
+    textAlign: 'center',
+    lineHeight: 16,
+    paddingHorizontal: 16,
+  },
+  experimentList: {
+    gap: 10,
+  },
+  expCard: {
+    backgroundColor: Colors.neutralCard,
+    borderRadius: 14,
+    padding: 14,
+    gap: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  expCardTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  expItemTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.textStrong,
+  },
+  expItemType: {
     fontSize: 10,
     color: Colors.textSubtle,
     marginTop: 2,
   },
-  workedBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.surfaceTintMint,
+  statusPill: {
+    backgroundColor: Colors.surfaceContainer,
     paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 10,
-    gap: 4,
+    paddingVertical: 2,
+    borderRadius: 8,
   },
-  workedBadgeText: {
+  statusPillText: {
     fontSize: 10,
     fontWeight: '600',
-    color: Colors.secondary,
+    color: Colors.textSubtle,
   },
-  partialBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.surfaceTintAmber,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 10,
-    gap: 4,
-  },
-  partialBadgeText: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: Colors.tertiary,
-  },
-  aiInsightBox: {
-    backgroundColor: Colors.surfaceTintViolet,
-    borderRadius: 12,
-    padding: 12,
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 20,
-  },
-  aiAvatarCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: Colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  aiInsightHeader: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: Colors.primary,
-  },
-  aiInsightText: {
+  expItemDesc: {
     fontSize: 12,
-    color: Colors.onSurface,
-    marginTop: 2,
+    color: Colors.textSubtle,
     lineHeight: 16,
   },
-  boldPrimary: {
+  expResultSnippet: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: Colors.surfaceTintMint,
+    borderRadius: 8,
+    padding: 8,
+  },
+  expResultText: {
+    fontSize: 11,
+    color: Colors.secondary,
+    fontWeight: '500',
+  },
+  startBtn: {
+    alignSelf: 'flex-start',
+    backgroundColor: Colors.secondary,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 4,
+  },
+  startBtnText: {
+    fontSize: 11,
     fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  smallEvalBtn: {
+    alignSelf: 'flex-start',
+    backgroundColor: Colors.primaryFixed,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 4,
+  },
+  smallEvalText: {
+    fontSize: 11,
+    fontWeight: '600',
     color: Colors.primary,
   },
-  actionsGroup: {
-    gap: 10,
-  },
-  btnPrimary: {
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: Colors.primaryContainer,
-    flexDirection: 'row',
+  loadingBox: {
+    padding: 20,
     alignItems: 'center',
-    justifyContent: 'center',
     gap: 8,
-    shadowColor: Colors.primaryContainer,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 3,
   },
-  btnPrimaryText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.onPrimary,
-  },
-  secondaryActionsRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  btnSecondary: {
-    flex: 1,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: Colors.surfaceContainerHigh,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-  },
-  btnSecondaryText: {
+  loadingText: {
     fontSize: 12,
-    fontWeight: '600',
-    color: Colors.onSurfaceVariant,
-  },
-  btnAdopt: {
-    flex: 1,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: Colors.surfaceTintMint,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-  },
-  btnAdoptText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: Colors.secondary,
+    color: Colors.textSubtle,
   },
 });

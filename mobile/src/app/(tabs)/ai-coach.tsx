@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,34 +7,82 @@ import {
   TextInput,
   TouchableOpacity,
   SafeAreaView,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
+import { useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Header } from '@/components/Header';
 import { Colors } from '@/constants/theme';
+import { aiService } from '@/services/ai';
+import { ConversationResponse, MessageResponse, AIExplanationResponse } from '@/types/chat';
 
 export default function AICoachScreen() {
-  const [inputText, setInputText] = useState('');
-  const [isRuleApplied, setIsRuleApplied] = useState(false);
-  const [isRuleDismissed, setIsRuleDismissed] = useState(false);
-  const [messages, setMessages] = useState([
-    {
-      id: '1',
-      sender: 'user',
-      text: 'Why did you recommend the 10-Minute Micro-Start Buffer experiment for afternoon sprints?',
-      time: '2:15 PM',
-    },
-  ]);
+  const params = useLocalSearchParams<{ initialPrompt?: string }>();
+  const [conversation, setConversation] = useState<ConversationResponse | null>(null);
+  const [messages, setMessages] = useState<MessageResponse[]>([]);
+  const [inputText, setInputText] = useState(params.initialPrompt || '');
+  const [isLoadingHistory, setIsLoadingHistory] = useState(true);
+  const [isSending, setIsSending] = useState(false);
+  const [activeExplanation, setActiveExplanation] = useState<AIExplanationResponse | null>(null);
 
-  const handleSend = () => {
-    if (!inputText.trim()) return;
-    const userMsg = {
-      id: Date.now().toString(),
+  const scrollRef = useRef<ScrollView | null>(null);
+
+  useEffect(() => {
+    async function loadConversation() {
+      try {
+        setIsLoadingHistory(true);
+        const convo = await aiService.createOrGetConversation();
+        setConversation(convo);
+        setMessages(convo.messages || []);
+      } catch (err: any) {
+        Alert.alert('AI Companion Notice', err.message || 'Could not load conversation session.');
+      } finally {
+        setIsLoadingHistory(false);
+      }
+    }
+    loadConversation();
+  }, []);
+
+  const handleSend = async () => {
+    const textToSend = inputText.trim();
+    if (!textToSend || !conversation || isSending) return;
+
+    // Optimistic local user message
+    const tempUserMsg: MessageResponse = {
+      id: `temp-${Date.now()}`,
+      conversation_id: conversation.id,
       sender: 'user',
-      text: inputText,
-      time: 'Just now',
+      content: textToSend,
+      created_at: new Date().toISOString(),
     };
-    setMessages((prev) => [...prev, userMsg]);
+    setMessages((prev) => [...prev, tempUserMsg]);
     setInputText('');
+    setIsSending(true);
+
+    try {
+      const assistantReply = await aiService.sendMessage(conversation.id, textToSend);
+      setMessages((prev) => [...prev, assistantReply]);
+      setTimeout(() => {
+        scrollRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+    } catch (err: any) {
+      Alert.alert('AI Error', err.message || 'Could not get response from AI coach.');
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  const handleExplain = async (question: string) => {
+    try {
+      setIsSending(true);
+      const explanation = await aiService.explain({ question });
+      setActiveExplanation(explanation);
+    } catch (err: any) {
+      Alert.alert('Explanation Error', err.message || 'Could not build behavioral explanation.');
+    } finally {
+      setIsSending(false);
+    }
   };
 
   const handlePillSelect = (inquiryText: string) => {
@@ -46,35 +94,57 @@ export default function AICoachScreen() {
       <Header title="AI Coach" />
 
       <ScrollView
+        ref={scrollRef}
         style={styles.container}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Top Context & Privacy Pill Banner */}
+        {/* Top Context & Grounded Status Banner */}
         <View style={styles.privacyBanner}>
           <View style={styles.privacyHeaderRow}>
             <View style={styles.activeContextTag}>
               <View style={styles.greenPulse} />
-              <Text style={styles.activeContextText}>AI Context Active • 182 Local Data Points</Text>
+              <Text style={styles.activeContextText}>Grounded AI Context</Text>
             </View>
             <View style={styles.privateTag}>
               <Ionicons name="shield-checkmark-outline" size={14} color={Colors.secondary} />
-              <Text style={styles.privateTagText}>Local & Private</Text>
+              <Text style={styles.privateTagText}>Deterministic Evidence</Text>
             </View>
           </View>
           <Text style={styles.privacySubText}>
-            Grounded in your real task, screen, and sleep telemetry. Zero generic fluff.
+            Every answer is constructed strictly from verified database records of your tasks, check-ins, and delay episodes.
           </Text>
         </View>
 
-        {/* Horizontal Suggested Inquiries Scroll */}
+        {/* Structured Explanation Banner (if available) */}
+        {activeExplanation && (
+          <View style={styles.explanationCard}>
+            <View style={styles.expHeaderRow}>
+              <Ionicons name="sparkles" size={18} color={Colors.primary} />
+              <Text style={styles.expTitle}>{activeExplanation.title}</Text>
+              <TouchableOpacity onPress={() => setActiveExplanation(null)}>
+                <Ionicons name="close" size={18} color={Colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.expBody}>{activeExplanation.explanation}</Text>
+            {activeExplanation.suggested_micro_experiment && (
+              <View style={styles.microExpBox}>
+                <Ionicons name="flask-outline" size={14} color={Colors.secondary} />
+                <Text style={styles.microExpText}>
+                  Micro-Experiment: {activeExplanation.suggested_micro_experiment}
+                </Text>
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* Suggested Inquiries Scroll */}
         <View style={styles.suggestedContainer}>
           <View style={styles.suggestedHeaderRow}>
-            <Text style={styles.suggestedLabel}>SUGGESTED INQUIRIES</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-              <Ionicons name="flash-outline" size={12} color={Colors.primary} />
-              <Text style={styles.realtimeText}>Real-time Sync</Text>
-            </View>
+            <Text style={styles.suggestedLabel}>VERIFIED INQUIRIES</Text>
+            <TouchableOpacity onPress={() => handleExplain('Analyze my recent focus patterns')}>
+              <Text style={styles.realtimeText}>Request Deep Analysis</Text>
+            </TouchableOpacity>
           </View>
 
           <ScrollView
@@ -83,10 +153,10 @@ export default function AICoachScreen() {
             contentContainerStyle={styles.pillsScroll}
           >
             {[
-              { label: 'Why was 10m Micro-Start recommended?', icon: 'flask-outline' },
-              { label: 'When is my best focus window?', icon: 'sunny-outline' },
-              { label: 'How does my sleep affect my start delay?', icon: 'moon-outline' },
-              { label: 'Show my 30-day completion trend', icon: 'trending-up-outline' },
+              { label: 'Why am I delaying task initiation?', icon: 'flask-outline' },
+              { label: 'Suggest a micro-start routine', icon: 'sunny-outline' },
+              { label: 'What is my best focus window?', icon: 'time-outline' },
+              { label: 'How to build momentum today?', icon: 'trending-up-outline' },
             ].map((item, idx) => (
               <TouchableOpacity
                 key={idx}
@@ -103,155 +173,64 @@ export default function AICoachScreen() {
 
         {/* Conversational Feed */}
         <View style={styles.chatFeed}>
-          {messages.map((msg) => (
-            <View key={msg.id} style={styles.userBubbleWrapper}>
-              <View style={styles.userBubble}>
-                <Text style={styles.userBubbleText}>{msg.text}</Text>
-              </View>
-              <View style={styles.userMetaRow}>
-                <Text style={styles.metaTime}>{msg.time}</Text>
-                <Ionicons name="checkmark-done" size={14} color={Colors.primary} />
-              </View>
+          {isLoadingHistory ? (
+            <View style={styles.loadingBox}>
+              <ActivityIndicator color={Colors.primary} size="small" />
+              <Text style={styles.loadingText}>Restoring companion conversation...</Text>
             </View>
-          ))}
-
-          {/* AI Coach Answer Card */}
-          <View style={styles.aiMessageWrapper}>
-            <View style={styles.aiAvatarCircle}>
-              <Ionicons name="hardware-chip-outline" size={18} color={Colors.onPrimaryContainer} />
-            </View>
-
-            <View style={styles.aiAnswerCard}>
-              <View style={styles.cardHeaderRow}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text style={styles.engineTitle}>Behavioral Engine</Text>
-                  <View style={styles.blueDot} />
-                  <Text style={styles.engineVer}>v2.4 Grounded</Text>
-                </View>
-                <Text style={styles.metaTime}>Just now</Text>
+          ) : messages.length === 0 ? (
+            <View style={styles.emptyChatBox}>
+              <View style={styles.emptyChatIconCircle}>
+                <Ionicons name="chatbubble-ellipses-outline" size={32} color={Colors.primary} />
               </View>
-
-              <Text style={styles.aiAnswerBody}>
-                Based on your verified activity over the last 14 days, I isolated a recurring{' '}
-                <Text style={styles.coralText}>38-minute start delay</Text> specifically on{' '}
-                <Text style={styles.boldText}>High-Difficulty tasks</Text> scheduled between 1:30 PM and 3:30 PM.
+              <Text style={styles.emptyChatTitle}>FocusLoop AI Companion</Text>
+              <Text style={styles.emptyChatSubtitle}>
+                Ask questions or choose a suggested topic above. The companion retrieves your verified focus metrics before answering.
               </Text>
-
-              {/* Supporting Evidence Box */}
-              <View style={styles.evidenceBox}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                  <Ionicons name="search-outline" size={14} color={Colors.primary} />
-                  <Text style={styles.evidenceTitle}>SUPPORTING EVIDENCE</Text>
-                </View>
-                <View style={styles.evidenceItem}>
-                  <View style={styles.coralBullet} />
-                  <Text style={styles.evidenceText}>
-                    <Text style={styles.boldText}>Sleep Correlation:</Text> On days with {'<'}6h sleep, afternoon delay lengthened by <Text style={styles.coralText}>+49 minutes</Text>.
-                  </Text>
-                </View>
-                <View style={styles.evidenceItem}>
-                  <View style={styles.coralBullet} />
-                  <Text style={styles.evidenceText}>
-                    <Text style={styles.boldText}>App Context:</Text> 16m YouTube and 6m Twitter were logged during verified hesitation windows.
-                  </Text>
-                </View>
+            </View>
+          ) : (
+            messages.map((msg) => (
+              <View
+                key={msg.id}
+                style={
+                  msg.sender === 'user'
+                    ? styles.userBubbleWrapper
+                    : styles.aiMessageWrapper
+                }
+              >
+                {msg.sender === 'user' ? (
+                  <>
+                    <View style={styles.userBubble}>
+                      <Text style={styles.userBubbleText}>{msg.content}</Text>
+                    </View>
+                    <View style={styles.userMetaRow}>
+                      <Ionicons name="checkmark-done" size={14} color={Colors.primary} />
+                    </View>
+                  </>
+                ) : (
+                  <>
+                    <View style={styles.aiAvatarCircle}>
+                      <Ionicons name="hardware-chip-outline" size={18} color="#FFFFFF" />
+                    </View>
+                    <View style={styles.aiAnswerCard}>
+                      <Text style={styles.aiAnswerBody}>{msg.content}</Text>
+                    </View>
+                  </>
+                )}
               </View>
+            ))
+          )}
 
-              {/* Result So Far Box */}
-              <View style={styles.resultBox}>
-                <View style={styles.resultHeaderRow}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <Ionicons name="checkmark-circle-outline" size={16} color={Colors.secondary} />
-                    <Text style={styles.resultTitle}>Result so far (Day 4 of 7)</Text>
-                  </View>
-                  <View style={styles.pBadge}>
-                    <Text style={styles.pBadgeText}>p = 0.03</Text>
-                  </View>
-                </View>
-                <Text style={styles.resultBody}>
-                  By committing to just 10 low-stakes minutes, your observed latency dropped from 38m down to{' '}
-                  <Text style={styles.secondaryBold}>16m</Text> (<Text style={styles.secondaryBold}>-57% latency reduction</Text>).
+          {isSending && (
+            <View style={styles.aiMessageWrapper}>
+              <View style={styles.aiAvatarCircle}>
+                <Ionicons name="hardware-chip-outline" size={18} color="#FFFFFF" />
+              </View>
+              <View style={[styles.aiAnswerCard, { paddingVertical: 12 }]}>
+                <ActivityIndicator size="small" color={Colors.primary} />
+                <Text style={{ fontSize: 11, color: Colors.textSubtle, marginTop: 4 }}>
+                  Consulting behavioral context...
                 </Text>
-
-                {/* Inline Comparison Latency Bar */}
-                <View style={styles.comparisonBars}>
-                  <View style={styles.barLabelRow}>
-                    <Text style={styles.barLabelText}>Baseline Hesitation</Text>
-                    <Text style={styles.barLabelVal}>38 min</Text>
-                  </View>
-                  <View style={styles.barTrack}>
-                    <View style={[styles.barFill, { width: '78%', backgroundColor: Colors.accentCoral }]} />
-                  </View>
-
-                  <View style={[styles.barLabelRow, { marginTop: 6 }]}>
-                    <Text style={styles.barLabelText}>Protocol #04 Sprint</Text>
-                    <Text style={[styles.barLabelVal, { color: Colors.secondary }]}>16 min (-57%)</Text>
-                  </View>
-                  <View style={styles.barTrack}>
-                    <View style={[styles.barFill, { width: '33%', backgroundColor: Colors.secondary }]} />
-                  </View>
-                </View>
-              </View>
-
-              {/* Deep-dive Action CTA Buttons */}
-              <View style={styles.ctaButtonsRow}>
-                <TouchableOpacity style={styles.ctaBtnViolet}>
-                  <Ionicons name="book-outline" size={14} color={Colors.primary} />
-                  <Text style={styles.ctaBtnVioletText}>View Protocol Spec</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.ctaBtnContainer}>
-                  <Ionicons name="list-outline" size={14} color={Colors.textStrong} />
-                  <Text style={styles.ctaBtnContainerText}>Inspect 14 Episodes</Text>
-                </TouchableOpacity>
-              </View>
-
-              {/* Feedback footer */}
-              <View style={styles.feedbackRow}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                  <Ionicons name="lock-closed" size={12} color={Colors.textMuted} />
-                  <Text style={styles.feedbackText}>Calculated on device</Text>
-                </View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text style={styles.feedbackText}>Helpful?</Text>
-                  <TouchableOpacity style={styles.thumbBtn}>
-                    <Ionicons name="thumbs-up-outline" size={12} color={Colors.textSubtle} />
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.thumbBtn}>
-                    <Ionicons name="thumbs-down-outline" size={12} color={Colors.textSubtle} />
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </View>
-          </View>
-
-          {/* Interactive Dynamic Rule proposal card */}
-          {!isRuleDismissed && (
-            <View style={[styles.ruleProposalCard, isRuleApplied && { opacity: 0.8 }]}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Ionicons name="options-outline" size={16} color={Colors.accentIndigo} />
-                <Text style={styles.ruleHeader}>Autonomous Routine Tuning</Text>
-              </View>
-              <Text style={styles.ruleBody}>
-                <Text style={{ fontWeight: '700' }}>Adaptive Sleep Rule:</Text> Extend buffer delay threshold to 25m on well-rested days ({'>'}7.5h sleep)?
-              </Text>
-
-              <View style={styles.ruleBtnRow}>
-                <TouchableOpacity
-                  style={[styles.applyRuleBtn, isRuleApplied && { backgroundColor: Colors.secondary }]}
-                  onPress={() => setIsRuleApplied(true)}
-                >
-                  <Ionicons name="checkmark-circle" size={16} color={Colors.onPrimary} />
-                  <Text style={styles.applyRuleBtnText}>
-                    {isRuleApplied ? 'Applied to Protocol #04' : 'Apply Dynamic Rule'}
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.dismissBtn}
-                  onPress={() => setIsRuleDismissed(true)}
-                >
-                  <Text style={styles.dismissBtnText}>Dismiss</Text>
-                </TouchableOpacity>
               </View>
             </View>
           )}
@@ -267,16 +246,19 @@ export default function AICoachScreen() {
               placeholderTextColor={Colors.textMuted}
               value={inputText}
               onChangeText={setInputText}
+              onSubmitEditing={handleSend}
             />
-            <TouchableOpacity style={styles.micBtn}>
-              <Ionicons name="mic-outline" size={18} color={Colors.textSubtle} />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.sendBtn} onPress={handleSend} activeOpacity={0.8}>
-              <Ionicons name="arrow-up" size={18} color={Colors.onPrimaryContainer} />
+            <TouchableOpacity
+              style={[styles.sendBtn, (!inputText.trim() || isSending) && { opacity: 0.5 }]}
+              onPress={handleSend}
+              disabled={!inputText.trim() || isSending}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="arrow-up" size={18} color="#FFFFFF" />
             </TouchableOpacity>
           </View>
           <Text style={styles.inputFooterText}>
-            🔒 Answers strictly grounded in your deterministic local data.
+            🔒 Answers strictly grounded in your deterministic backend data.
           </Text>
         </View>
       </ScrollView>
@@ -347,6 +329,46 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: Colors.textSubtle,
     marginTop: 6,
+    lineHeight: 16,
+  },
+  explanationCard: {
+    backgroundColor: Colors.surfaceTintViolet,
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 16,
+    gap: 8,
+  },
+  expHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  expTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.primary,
+    flex: 1,
+    marginLeft: 6,
+  },
+  expBody: {
+    fontSize: 12,
+    color: Colors.textStrong,
+    lineHeight: 18,
+  },
+  microExpBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#FFFFFF',
+    padding: 8,
+    borderRadius: 8,
+    marginTop: 4,
+  },
+  microExpText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: Colors.secondary,
+    flex: 1,
   },
   suggestedContainer: {
     marginBottom: 16,
@@ -364,8 +386,8 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   realtimeText: {
-    fontSize: 10,
-    fontWeight: '500',
+    fontSize: 11,
+    fontWeight: '600',
     color: Colors.primary,
   },
   pillsScroll: {
@@ -394,6 +416,50 @@ const styles = StyleSheet.create({
   chatFeed: {
     gap: 16,
     marginBottom: 16,
+    minHeight: 200,
+  },
+  loadingBox: {
+    padding: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  loadingText: {
+    fontSize: 12,
+    color: Colors.textSubtle,
+  },
+  emptyChatBox: {
+    backgroundColor: Colors.surfaceContainerLowest,
+    borderRadius: 16,
+    padding: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: 12,
+    borderWidth: 1,
+    borderColor: Colors.neutralBorder,
+    borderStyle: 'dashed',
+  },
+  emptyChatIconCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: Colors.surfaceTintViolet,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  emptyChatTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.textStrong,
+    marginBottom: 6,
+  },
+  emptyChatSubtitle: {
+    fontSize: 12,
+    color: Colors.textSubtle,
+    textAlign: 'center',
+    lineHeight: 18,
+    paddingHorizontal: 12,
   },
   userBubbleWrapper: {
     alignItems: 'flex-end',
@@ -422,10 +488,6 @@ const styles = StyleSheet.create({
     marginTop: 4,
     marginRight: 4,
   },
-  metaTime: {
-    fontSize: 10,
-    color: Colors.textMuted,
-  },
   aiMessageWrapper: {
     flexDirection: 'row',
     gap: 10,
@@ -450,231 +512,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 12,
     elevation: 3,
-    gap: 12,
-  },
-  cardHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  engineTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: Colors.primary,
-  },
-  blueDot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: Colors.primaryContainer,
-  },
-  engineVer: {
-    fontSize: 10,
-    color: Colors.textMuted,
   },
   aiAnswerBody: {
     fontSize: 13,
     color: Colors.textStrong,
     lineHeight: 20,
-  },
-  coralText: {
-    fontWeight: '700',
-    color: Colors.accentCoral,
-  },
-  boldText: {
-    fontWeight: '700',
-    color: Colors.textStrong,
-  },
-  secondaryBold: {
-    fontWeight: '700',
-    color: Colors.secondary,
-  },
-  evidenceBox: {
-    backgroundColor: Colors.surfaceContainerLow,
-    borderRadius: 12,
-    padding: 10,
-    gap: 6,
-  },
-  evidenceTitle: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: Colors.primary,
-    letterSpacing: 0.5,
-  },
-  evidenceItem: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 6,
-  },
-  coralBullet: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: Colors.accentCoral,
-    marginTop: 6,
-  },
-  evidenceText: {
-    fontSize: 11,
-    color: Colors.onSurfaceVariant,
-    lineHeight: 16,
-    flex: 1,
-  },
-  resultBox: {
-    backgroundColor: Colors.surfaceTintMint,
-    borderRadius: 12,
-    padding: 10,
-    gap: 8,
-  },
-  resultHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  resultTitle: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: Colors.onSecondaryFixedVariant,
-  },
-  pBadge: {
-    backgroundColor: Colors.secondaryFixed,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 10,
-  },
-  pBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: Colors.onSecondaryFixed,
-  },
-  resultBody: {
-    fontSize: 11,
-    color: Colors.onSecondaryFixedVariant,
-    lineHeight: 16,
-  },
-  comparisonBars: {
-    gap: 4,
-    marginTop: 4,
-  },
-  barLabelRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  barLabelText: {
-    fontSize: 10,
-    color: Colors.onSecondaryFixedVariant,
-  },
-  barLabelVal: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: Colors.onSecondaryFixedVariant,
-  },
-  barTrack: {
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: Colors.surfaceContainerHighest,
-    overflow: 'hidden',
-  },
-  barFill: {
-    height: '100%',
-    borderRadius: 4,
-  },
-  ctaButtonsRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  ctaBtnViolet: {
-    flex: 1,
-    backgroundColor: Colors.surfaceTintViolet,
-    paddingVertical: 8,
-    borderRadius: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-  },
-  ctaBtnVioletText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: Colors.primary,
-  },
-  ctaBtnContainer: {
-    flex: 1,
-    backgroundColor: Colors.surfaceContainer,
-    paddingVertical: 8,
-    borderRadius: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-  },
-  ctaBtnContainerText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: Colors.textStrong,
-  },
-  feedbackRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  feedbackText: {
-    fontSize: 10,
-    color: Colors.textMuted,
-  },
-  thumbBtn: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: Colors.surfaceContainerLow,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  ruleProposalCard: {
-    marginLeft: 46,
-    backgroundColor: Colors.surfaceTintBlue,
-    borderRadius: 12,
-    padding: 12,
-    gap: 8,
-  },
-  ruleHeader: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: Colors.accentIndigo,
-  },
-  ruleBody: {
-    fontSize: 12,
-    color: Colors.textStrong,
-    lineHeight: 16,
-  },
-  ruleBtnRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 4,
-  },
-  applyRuleBtn: {
-    flex: 1,
-    backgroundColor: Colors.primary,
-    paddingVertical: 8,
-    borderRadius: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-  },
-  applyRuleBtnText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: Colors.onPrimary,
-  },
-  dismissBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  dismissBtnText: {
-    fontSize: 11,
-    color: Colors.textSubtle,
   },
   inputBarContainer: {
     marginTop: 12,
@@ -694,12 +536,9 @@ const styles = StyleSheet.create({
   },
   textInput: {
     flex: 1,
-    fontSize: 12,
+    fontSize: 13,
     color: Colors.textStrong,
     marginLeft: 8,
-  },
-  micBtn: {
-    padding: 6,
   },
   sendBtn: {
     width: 34,

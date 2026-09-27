@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -6,25 +6,58 @@ import {
   ScrollView,
   TouchableOpacity,
   SafeAreaView,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Header } from '@/components/Header';
 import { Colors } from '@/constants/theme';
+import { procrastinationService } from '@/services/procrastination';
+import { ProcrastinationEventResponse } from '@/types/procrastination';
+import { useBehavior } from '@/hooks/useBehavior';
+import { useTasks } from '@/hooks/useTasks';
+import { useProcrastination } from '@/hooks/useProcrastination';
+import { formatTimestamp, formatSeconds } from '@/utils/formatters';
 
 export default function DelayLogScreen() {
   const router = useRouter();
-  const [seconds, setSeconds] = useState(18 * 60 + 45);
-  const [isReadyStarted, setIsReadyStarted] = useState(false);
-  const [isBreathing, setIsBreathing] = useState(false);
+  const { summary, refresh: refreshBehavior } = useBehavior();
+  const { tasks } = useTasks();
+  const {
+    events,
+    isLoading: eventsLoading,
+    error: eventsError,
+    fetchEvents,
+    startEvent,
+    endEvent,
+  } = useProcrastination();
 
-  // Live timer tick to simulate mindful real-time awareness
+  const [activeEvent, setActiveEvent] = useState<ProcrastinationEventResponse | null>(null);
+  const [seconds, setSeconds] = useState(0);
+  const [isStarting, setIsStarting] = useState(false);
+  const [isEnding, setIsEnding] = useState(false);
+  const [isBreathing, setIsBreathing] = useState(false);
+  const [completionNotice, setCompletionNotice] = useState<string | null>(null);
+
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   useEffect(() => {
-    const timer = setInterval(() => {
-      setSeconds((prev) => prev + 1);
-    }, 1000);
-    return () => clearInterval(timer);
-  }, []);
+    if (activeEvent) {
+      timerRef.current = setInterval(() => {
+        setSeconds((prev) => prev + 1);
+      }, 1000);
+    } else {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
+      setSeconds(0);
+    }
+
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [activeEvent]);
 
   const formatTime = (totalSecs: number) => {
     const mins = Math.floor(totalSecs / 60);
@@ -32,11 +65,49 @@ export default function DelayLogScreen() {
     return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
   };
 
-  const handleReadyPress = () => {
-    setIsReadyStarted(true);
-    setTimeout(() => {
+  const handleStartEpisode = async () => {
+    try {
+      setIsStarting(true);
+      setCompletionNotice(null);
+      const firstTask = tasks[0];
+      const event = await startEvent({
+        task_id: firstTask ? firstTask.id : undefined,
+        started_at: new Date().toISOString(),
+        trigger_reason: 'Mindful Delay Check',
+        notes: 'User initiated friction intercept',
+      });
+      setActiveEvent(event);
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Could not start delay episode');
+    } finally {
+      setIsStarting(false);
+    }
+  };
+
+  const handleEndEpisode = async () => {
+    if (!activeEvent) {
+      // If no active event, redirect to tasks
       router.push('/');
-    }, 1200);
+      return;
+    }
+
+    try {
+      setIsEnding(true);
+      await endEvent(activeEvent.id, {
+        ended_at: new Date().toISOString(),
+        notes: `Ended with ${formatTime(seconds)} elapsed friction`,
+      });
+      setActiveEvent(null);
+      setCompletionNotice(`Mindful pause concluded (${formatTime(seconds)}). Momentum restored!`);
+      await refreshBehavior();
+      setTimeout(() => {
+        router.push('/');
+      }, 1500);
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Could not finalize delay episode');
+    } finally {
+      setIsEnding(false);
+    }
   };
 
   const handleBreathePress = () => {
@@ -61,23 +132,48 @@ export default function DelayLogScreen() {
               <Text style={styles.nudgeTagText}>COMPASSIONATE NUDGE</Text>
             </View>
             <View style={styles.livePulseRow}>
-              <View style={styles.pulseDot} />
-              <Text style={styles.livePulseText}>Adaptive Pause</Text>
+              <View style={[styles.pulseDot, activeEvent && { backgroundColor: Colors.accentCoral }]} />
+              <Text style={styles.livePulseText}>
+                {activeEvent ? 'Active Friction Tracking' : 'Ready to Pause'}
+              </Text>
             </View>
           </View>
           <Text style={styles.mainTitle}>Friction Intercept</Text>
-          <Text style={styles.subTitle}>No guilt. Just clear awareness to gently reset your momentum.</Text>
+          <Text style={styles.subTitle}>
+            No guilt. Authoritative backend event logging to gently understand resistance patterns.
+          </Text>
         </View>
+
+        {/* Completion notice */}
+        {completionNotice && (
+          <View style={styles.completionBanner}>
+            <Ionicons name="sparkles" size={18} color={Colors.secondary} />
+            <Text style={styles.completionText}>{completionNotice}</Text>
+          </View>
+        )}
 
         {/* Circular Gauge Card */}
         <View style={styles.gaugeCard}>
           <View style={styles.circularDial}>
             <View style={styles.dialInner}>
               <Text style={styles.timeDisplay}>{formatTime(seconds)}</Text>
-              <Text style={styles.dialSubLabel}>Elapsed Friction</Text>
+              <Text style={styles.dialSubLabel}>
+                {activeEvent ? 'Elapsed Friction (Live)' : 'Timer Inactive'}
+              </Text>
               <View style={styles.driftBadge}>
-                <Ionicons name="trending-up" size={12} color={Colors.accentCoral} />
-                <Text style={styles.driftText}>+2m drift</Text>
+                <Ionicons
+                  name={activeEvent ? 'alert-circle-outline' : 'checkmark-outline'}
+                  size={12}
+                  color={activeEvent ? Colors.accentCoral : Colors.secondary}
+                />
+                <Text
+                  style={[
+                    styles.driftText,
+                    { color: activeEvent ? Colors.accentCoral : Colors.secondary },
+                  ]}
+                >
+                  {activeEvent ? `Event: #${activeEvent.id.slice(0, 8)}` : 'Zero active drift'}
+                </Text>
               </View>
             </View>
           </View>
@@ -87,38 +183,57 @@ export default function DelayLogScreen() {
             <View style={styles.targetHeader}>
               <Text style={styles.targetLabel}>SCHEDULED TARGET</Text>
               <View style={styles.frictionTag}>
-                <View style={styles.redDot} />
-                <Text style={styles.frictionTagText}>High Friction</Text>
+                <Text style={[styles.frictionTagText, { color: Colors.textSubtle }]}>
+                  {activeEvent ? 'In Delay Window' : 'Idle'}
+                </Text>
               </View>
             </View>
             <View style={styles.targetTitleRow}>
               <View style={styles.terminalIcon}>
                 <Ionicons name="terminal-outline" size={16} color={Colors.primary} />
               </View>
-              <Text style={styles.targetTitle}>Drafting Architecture Spec</Text>
+              <Text style={styles.targetTitle}>
+                {tasks.length > 0 ? tasks[0].name : 'General Work Session'}
+              </Text>
             </View>
           </View>
         </View>
 
         {/* Primary Ergonomic Actions */}
         <View style={styles.actionsContainer}>
-          <TouchableOpacity
-            style={[
-              styles.btnReady,
-              isReadyStarted && { backgroundColor: Colors.primary },
-            ]}
-            onPress={handleReadyPress}
-            activeOpacity={0.85}
-          >
-            <Ionicons
-              name={isReadyStarted ? 'sparkles' : 'checkmark-circle'}
-              size={22}
-              color={Colors.onSecondary}
-            />
-            <Text style={styles.btnReadyText}>
-              {isReadyStarted ? "Let's Flow! Redirecting..." : "I'm Ready to Start Task"}
-            </Text>
-          </TouchableOpacity>
+          {activeEvent ? (
+            <TouchableOpacity
+              style={styles.btnReady}
+              onPress={handleEndEpisode}
+              disabled={isEnding}
+              activeOpacity={0.85}
+            >
+              {isEnding ? (
+                <ActivityIndicator color="#FFFFFF" size="small" />
+              ) : (
+                <>
+                  <Ionicons name="checkmark-circle" size={22} color={Colors.onSecondary} />
+                  <Text style={styles.btnReadyText}>I'm Ready to Start Task</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={[styles.btnStart, isStarting && { opacity: 0.6 }]}
+              onPress={handleStartEpisode}
+              disabled={isStarting}
+              activeOpacity={0.85}
+            >
+              {isStarting ? (
+                <ActivityIndicator color="#FFFFFF" size="small" />
+              ) : (
+                <>
+                  <Ionicons name="play-circle-outline" size={22} color="#FFFFFF" />
+                  <Text style={styles.btnStartText}>Start Mindful Delay Check</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          )}
 
           <View style={styles.dualActionsRow}>
             <TouchableOpacity
@@ -126,11 +241,7 @@ export default function DelayLogScreen() {
               onPress={handleBreathePress}
               activeOpacity={0.8}
             >
-              <Ionicons
-                name="body-outline"
-                size={18}
-                color={Colors.secondary}
-              />
+              <Ionicons name="body-outline" size={18} color={Colors.secondary} />
               <Text style={styles.btnBreatheText}>
                 {isBreathing ? 'Hold... Exhale' : '5-Min Breathe'}
               </Text>
@@ -161,7 +272,7 @@ export default function DelayLogScreen() {
                 </View>
               </View>
               <Text style={styles.resetDesc}>
-                Starting is the only real barrier. Would typing just a single bullet point or opening the blank workspace feel manageable right now?
+                Starting is the hardest step. Would typing just a single bullet point or opening the blank workspace feel manageable right now?
               </Text>
             </View>
           </View>
@@ -177,64 +288,28 @@ export default function DelayLogScreen() {
               </View>
               <Ionicons name="arrow-forward" size={16} color={Colors.primary} />
             </TouchableOpacity>
-
-            <TouchableOpacity style={styles.choiceBtnSecondary}>
-              <View style={styles.choiceLeft}>
-                <Ionicons name="git-branch-outline" size={16} color={Colors.textSubtle} />
-                <Text style={styles.choiceTextSecondary}>Still feeling stuck (Break it down)</Text>
-              </View>
-              <Ionicons name="options-outline" size={16} color={Colors.textSubtle} />
-            </TouchableOpacity>
           </View>
         </View>
 
-        {/* Telemetry Section */}
+        {/* Telemetry Section (Honest Device State) */}
         <View style={styles.telemetrySection}>
           <View style={styles.telemetryHeader}>
-            <Text style={styles.telemetryTitle}>CONTEXTUAL TELEMETRY (LOCAL)</Text>
+            <Text style={styles.telemetryTitle}>DEVICE TELEMETRY STATUS</Text>
             <View style={styles.onDeviceTag}>
               <Ionicons name="lock-closed" size={12} color={Colors.textSubtle} />
-              <Text style={styles.onDeviceText}>On-device only</Text>
+              <Text style={styles.onDeviceText}>Privacy Protected</Text>
             </View>
           </View>
 
           <View style={styles.telemetryGrid}>
             <View style={styles.telemetryCard}>
               <View style={[styles.appIconBox, { backgroundColor: Colors.surfaceTintRose }]}>
-                <Ionicons name="logo-youtube" size={18} color={Colors.accentCoral} />
+                <Ionicons name="apps-outline" size={18} color={Colors.accentCoral} />
               </View>
-              <View>
-                <Text style={styles.telemetryMetric}>12m active</Text>
-                <Text style={styles.telemetrySub}>YouTube Feed</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.telemetryMetric}>Native OS Hook</Text>
+                <Text style={styles.telemetrySub}>App Tracking Awaiting Permissions</Text>
               </View>
-            </View>
-
-            <View style={styles.telemetryCard}>
-              <View style={[styles.appIconBox, { backgroundColor: Colors.surfaceTintBlue }]}>
-                <Ionicons name="chatbubbles-outline" size={18} color={Colors.accentSky} />
-              </View>
-              <View>
-                <Text style={styles.telemetryMetric}>4m active</Text>
-                <Text style={styles.telemetrySub}>Social & Feeds</Text>
-              </View>
-            </View>
-          </View>
-
-          {/* Sleep Telemetry Banner */}
-          <View style={styles.sleepBanner}>
-            <View style={styles.sleepIconBox}>
-              <Ionicons name="bed-outline" size={16} color={Colors.tertiary} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Text style={styles.sleepTitle}>5h 40m Sleep Recorded</Text>
-                <View style={styles.resourceBadge}>
-                  <Text style={styles.resourceText}>Reduced Resource</Text>
-                </View>
-              </View>
-              <Text style={styles.sleepDesc}>
-                Short sleep elevates executive friction and start resistance. Lower your expectations for today's opening 10 minutes.
-              </Text>
             </View>
           </View>
         </View>
@@ -246,27 +321,138 @@ export default function DelayLogScreen() {
               <View style={styles.shieldBox}>
                 <Ionicons name="shield-checkmark" size={14} color={Colors.secondary} />
               </View>
-              <Text style={styles.ledgerTitle}>Attribution Ledger</Text>
+              <Text style={styles.ledgerTitle}>Verified Friction Ledger</Text>
             </View>
             <View style={styles.auditBadge}>
-              <Text style={styles.auditBadgeText}>Audit Ready</Text>
+              <Text style={styles.auditBadgeText}>Backend Verified</Text>
             </View>
           </View>
 
           <View style={styles.ledgerMetricsGrid}>
             <View style={styles.ledgerMetricTile}>
-              <Text style={[styles.ledgerValue, { color: Colors.primary }]}>1 Episode</Text>
-              <Text style={styles.ledgerSub}>User-Confirmed Log</Text>
+              <Text style={[styles.ledgerValue, { color: Colors.primary }]}>
+                {summary?.procrastination_count ?? 0} Episodes
+              </Text>
+              <Text style={styles.ledgerSub}>Recorded Friction Checks</Text>
             </View>
             <View style={styles.ledgerMetricTile}>
-              <Text style={styles.ledgerValue}>0 Overrides</Text>
-              <Text style={styles.ledgerSub}>Algorithmic Presumptions</Text>
+              <Text style={styles.ledgerValue}>
+                {summary?.total_procrastination_minutes ?? 0} Mins
+              </Text>
+              <Text style={styles.ledgerSub}>Total Paused Duration</Text>
             </View>
           </View>
 
           <Text style={styles.ledgerFooterNote}>
-            🛡️ Your data remains 100% on-device. Zero automated verdicts are stored without explicit confirmation.
+            🛡️ Your behavioral events are stored authoritatively on your FocusLoop backend. Zero automated verdicts are rendered without user confirmation.
           </Text>
+        </View>
+
+        {/* Recent Delay Episodes (Historical Procrastination Events) */}
+        <View style={styles.historySectionHeader}>
+          <View style={styles.historyTitleRow}>
+            <Ionicons name="time-outline" size={16} color={Colors.primary} />
+            <Text style={styles.historySectionTitle}>Recent Delay Episodes</Text>
+            {events.length > 0 && (
+              <View style={styles.historyCountBadge}>
+                <Text style={styles.historyCountBadgeText}>{events.length}</Text>
+              </View>
+            )}
+          </View>
+          {events.length > 0 && (
+            <TouchableOpacity
+              onPress={() => fetchEvents()}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Ionicons name="refresh-outline" size={16} color={Colors.primary} />
+            </TouchableOpacity>
+          )}
+        </View>
+
+        <View style={styles.historyList}>
+          {eventsLoading && events.length === 0 ? (
+            <View style={styles.loadingBox}>
+              <ActivityIndicator size="small" color={Colors.primary} />
+              <Text style={styles.loadingText}>Loading delay history...</Text>
+            </View>
+          ) : eventsError ? (
+            <View style={styles.errorBox}>
+              <Ionicons name="alert-circle-outline" size={24} color="#DC2626" />
+              <Text style={styles.errorBoxText}>{eventsError}</Text>
+              <TouchableOpacity
+                style={styles.retryBtn}
+                onPress={() => fetchEvents()}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="refresh" size={14} color={Colors.primary} />
+                <Text style={styles.retryBtnText}>Try again</Text>
+              </TouchableOpacity>
+            </View>
+          ) : events.length === 0 ? (
+            <View style={styles.emptyHistoryCard}>
+              <Ionicons name="shield-outline" size={28} color={Colors.textMuted} />
+              <Text style={styles.emptyHistoryTitle}>No delay episodes yet</Text>
+              <Text style={styles.emptyHistorySubtitle}>
+                Your confirmed procrastination episodes will appear here.
+              </Text>
+            </View>
+          ) : (
+            events.map((event) => {
+              const matchedTask = tasks.find((t) => t.id === event.task_id);
+              const targetName = matchedTask
+                ? matchedTask.name
+                : (event.task_id ? 'Task Session' : 'Mindful Friction Intercept');
+
+              return (
+                <View key={event.id} style={styles.episodeCard}>
+                  <View style={styles.episodeTopRow}>
+                    <View style={{ flex: 1, marginRight: 8 }}>
+                      <Text style={styles.episodeDate}>
+                        {formatTimestamp(event.started_at || event.created_at)}
+                      </Text>
+                      <Text style={styles.episodeTarget}>{targetName}</Text>
+                    </View>
+                    <View style={styles.episodeBadge}>
+                      <Ionicons name="pause-circle-outline" size={12} color={Colors.accentCoral} />
+                      <Text style={styles.episodeBadgeText}>
+                        {event.duration_seconds != null
+                          ? formatSeconds(event.duration_seconds)
+                          : (event.ended_at ? 'Concluded' : 'Active window')}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.episodeDetailsRow}>
+                    {event.trigger_reason && (
+                      <View style={styles.episodeDetailItem}>
+                        <Ionicons name="pricetag-outline" size={12} color={Colors.textSubtle} />
+                        <Text style={styles.episodeDetailText}>
+                          Trigger: <Text style={styles.episodeDetailValue}>{event.trigger_reason}</Text>
+                        </Text>
+                      </View>
+                    )}
+                    {event.duration_seconds != null && (
+                      <View style={styles.episodeDetailItem}>
+                        <Ionicons name="timer-outline" size={12} color={Colors.textSubtle} />
+                        <Text style={styles.episodeDetailText}>
+                          Duration: <Text style={styles.episodeDetailValue}>{formatSeconds(event.duration_seconds)}</Text>
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+
+                  {event.notes && (
+                    <View style={styles.episodeNotesBox}>
+                      <Ionicons name="chatbubble-ellipses-outline" size={12} color={Colors.textSubtle} />
+                      <Text style={styles.episodeNotesText} numberOfLines={2}>
+                        {event.notes}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              );
+            })
+          )}
         </View>
 
         {/* Bottom Quote */}
@@ -339,6 +525,21 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.textSubtle,
     marginTop: 2,
+    lineHeight: 18,
+  },
+  completionBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: Colors.surfaceTintMint,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+  },
+  completionText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.secondary,
   },
   gaugeCard: {
     backgroundColor: Colors.neutralCard,
@@ -388,7 +589,6 @@ const styles = StyleSheet.create({
   driftText: {
     fontSize: 10,
     fontWeight: '700',
-    color: Colors.accentCoral,
   },
   targetBox: {
     width: '100%',
@@ -411,22 +611,14 @@ const styles = StyleSheet.create({
   frictionTag: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.surfaceTintRose,
+    backgroundColor: Colors.surfaceContainer,
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 6,
-    gap: 4,
-  },
-  redDot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: Colors.accentCoral,
   },
   frictionTagText: {
     fontSize: 10,
     fontWeight: '600',
-    color: Colors.accentCoral,
   },
   targetTitleRow: {
     flexDirection: 'row',
@@ -450,6 +642,25 @@ const styles = StyleSheet.create({
   actionsContainer: {
     gap: 10,
     marginBottom: 16,
+  },
+  btnStart: {
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: Colors.primary,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  btnStartText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
   btnReady: {
     height: 52,
@@ -578,19 +789,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: Colors.primary,
   },
-  choiceBtnSecondary: {
-    backgroundColor: Colors.neutralCanvas,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  choiceTextSecondary: {
-    fontSize: 12,
-    color: Colors.textSubtle,
-  },
   telemetrySection: {
     marginBottom: 16,
     gap: 10,
@@ -623,7 +821,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.neutralCard,
     borderRadius: 12,
-    padding: 10,
+    padding: 12,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
@@ -643,43 +841,7 @@ const styles = StyleSheet.create({
   telemetrySub: {
     fontSize: 10,
     color: Colors.textSubtle,
-  },
-  sleepBanner: {
-    backgroundColor: Colors.surfaceTintAmber,
-    borderRadius: 12,
-    padding: 12,
-    flexDirection: 'row',
-    gap: 10,
-  },
-  sleepIconBox: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
-    backgroundColor: Colors.tertiaryFixed,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sleepTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: Colors.tertiary,
-  },
-  resourceBadge: {
-    backgroundColor: 'rgba(129, 81, 0, 0.1)',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  resourceText: {
-    fontSize: 9,
-    fontWeight: '600',
-    color: Colors.tertiary,
-  },
-  sleepDesc: {
-    fontSize: 11,
-    color: Colors.tertiary,
-    marginTop: 4,
-    lineHeight: 16,
+    marginTop: 2,
   },
   ledgerCard: {
     backgroundColor: Colors.neutralCard,
@@ -753,5 +915,177 @@ const styles = StyleSheet.create({
     color: Colors.textSubtle,
     textAlign: 'center',
     marginTop: 4,
+  },
+  historySectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+    marginTop: 8,
+  },
+  historyTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  historySectionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.textStrong,
+  },
+  historyCountBadge: {
+    backgroundColor: Colors.surfaceTintViolet,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  historyCountBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.primary,
+  },
+  historyList: {
+    gap: 10,
+    marginBottom: 24,
+  },
+  loadingBox: {
+    padding: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  loadingText: {
+    fontSize: 12,
+    color: Colors.textSubtle,
+  },
+  errorBox: {
+    backgroundColor: '#FEE2E2',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    gap: 6,
+  },
+  errorBoxText: {
+    fontSize: 12,
+    color: '#B91C1C',
+    textAlign: 'center',
+  },
+  retryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: Colors.surfaceTintViolet,
+    borderRadius: 12,
+  },
+  retryBtnText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.primary,
+  },
+  emptyHistoryCard: {
+    backgroundColor: Colors.neutralCard,
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: Colors.neutralBorder,
+    borderStyle: 'dashed',
+  },
+  emptyHistoryTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.textStrong,
+    marginTop: 8,
+  },
+  emptyHistorySubtitle: {
+    fontSize: 12,
+    color: Colors.textSubtle,
+    textAlign: 'center',
+    marginTop: 4,
+    lineHeight: 16,
+    paddingHorizontal: 16,
+  },
+  episodeCard: {
+    backgroundColor: Colors.neutralCard,
+    borderRadius: 16,
+    padding: 14,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 6,
+    elevation: 1,
+    borderWidth: 1,
+    borderColor: Colors.neutralBorder,
+  },
+  episodeTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  episodeDate: {
+    fontSize: 11,
+    color: Colors.textSubtle,
+  },
+  episodeTarget: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.textStrong,
+    marginTop: 2,
+  },
+  episodeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: Colors.surfaceTintRose,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  episodeBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: Colors.accentCoral,
+  },
+  episodeDetailsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    marginTop: 10,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: Colors.neutralBorder,
+  },
+  episodeDetailItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  episodeDetailText: {
+    fontSize: 11,
+    color: Colors.textSubtle,
+  },
+  episodeDetailValue: {
+    fontWeight: '600',
+    color: Colors.textStrong,
+  },
+  episodeNotesBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 6,
+    backgroundColor: Colors.surfaceContainerLow,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  episodeNotesText: {
+    fontSize: 11,
+    color: Colors.textSubtle,
+    fontStyle: 'italic',
+    flex: 1,
   },
 });

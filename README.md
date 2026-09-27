@@ -19,11 +19,19 @@ FocusLoop is an Android-first personal productivity and behavioral-learning app 
 | **Social Profile & Privacy System** | ✅ Complete | Dual-profile architecture with strict backend privacy enforcement |
 | **Behavior Progress Curve** | ✅ Complete | 14-day continuous growth trajectory (improving, stable, setback, recovery) |
 | **Grading & Level Abstraction** | ✅ Complete | Multi-dimensional progression across 5 milestone tiers |
-| **Social / Friend Connections** | ✅ Complete | Friendship management and safe friend profile viewing |
+| **Username-Based Friend Requests** | ✅ Complete | `@username` lookup → pending request → accept/decline flow |
 | **AI Context Builder & Chat** | ✅ Complete | Grounded context injection with compassionate, analytical tone |
-| **PostgreSQL & Database Layer** | ✅ Complete | Full 15-table schema, Alembic migrations, connection pooling, SQLite fallback |
-| **Automated Test Suite** | ✅ 36/36 Passing | Complete unit, integration, auth, security, and PostgreSQL persistence tests |
-| **Mobile Frontend (React Native/Expo)** | 🔄 In Progress | Collaborator developing UI to connect to the completed backend |
+| **Personalized Onboarding** | ✅ Complete | 5-step onboarding collecting goal, role, focus challenges & schedule |
+| **Structured User Context** | ✅ Complete | `UserContext` model driving AI Coach personalization |
+| **Task Lifecycle (One-Time vs Daily)** | ✅ Complete | `frequency`: `once` / `daily`, per-day occurrence with idempotent check-ins |
+| **Task Occurrence Idempotency** | ✅ Complete | `UniqueConstraint(task_id, date)` + upsert logic in `POST /checkins` |
+| **PostgreSQL & Database Layer** | ✅ Complete | Full schema, 4 Alembic migrations, connection pooling, SQLite fallback |
+| **Time-Bounded Experiment Evaluation** | ✅ Complete | Pre-experiment baseline window vs. observation window; no lifetime dilution; `inconclusive` on sparse data |
+| **Experiment Lifecycle Enforcement** | ✅ Complete | `suggested → active → completed`; status-gated evaluation; profile refresh on completion |
+| **Experiment Generator** | ✅ Complete | Pattern-driven suggestions; idempotent (no duplicate experiment titles per user) |
+| **Lab Screen (Experiment UI)** | ✅ Complete | Crash fixed; status-aware hero banner, Start/Evaluate/Results display |
+| **Automated Test Suite** | ✅ Passing | **94 backend tests passing** (Auth, behavior engine, AI context, task lifecycle, social, time-bounded experiments) |
+| **Mobile Frontend (React Native/Expo)** | ✅ Connected | All major endpoints integrated end-to-end; Lab screen stable; physical Android testing verified |
 
 ---
 
@@ -2325,27 +2333,441 @@ The `SocialMetrics` Pydantic schema does not use `model_config = ConfigDict(excl
 
 ---
 
+## Session 11 — Android-to-Mac Backend Connectivity Fix
+
+### What was built
+
+Physical Android device (via Expo Go) was resolving the API base URL to `localhost` instead of the Mac's LAN IP address, making all API calls fail silently.
+
+- **Root cause identified** — `mobile/src/services/api.ts` was using `process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000'`. On a physical Android device, `localhost` is the device itself, not the development machine.
+- **`.env` file created** in `mobile/` — Added `EXPO_PUBLIC_API_URL=http://10.167.116.107:8000` so the Expo environment variable system resolves the correct LAN IP at build time rather than falling back to `localhost`.
+- **`mobile/.env.example` updated** — Documents `EXPO_PUBLIC_API_URL` as a required developer environment variable with instructions for setting the correct IP.
+- **`mobile/app.json` / `expo.extra` not modified** — The fix was intentionally applied only to the environment layer; the centralized `api.ts` architecture was preserved unchanged.
+- **End-to-end verified** — All API calls (auth, tasks, check-ins, behavior, chat) confirmed working on the physical Android phone via Expo Go.
+
+### Key files created / updated
+
+```text
+mobile/.env                  (Created — local only, gitignored)
+mobile/.env.example          (Updated — documents EXPO_PUBLIC_API_URL)
+```
+
+---
+
+## Session 12 — Username-Based Friend Requests with Accept/Decline Flow
+
+### What was built
+
+Replaced the brittle "Enter Friend's UUID" UX with a proper social graph flow based on `@username` lookup, pending states, and explicit accept/decline actions.
+
+#### Backend
+
+- **`GET /api/v1/social/users/search?username=@handle`** — New endpoint: case-insensitive username lookup returning public identity (`id`, `username`, `display_name`). Returns `404` if user not found, `400` if searching for yourself.
+- **`POST /api/v1/social/friends/request`** — Sends a friend request (`{ "username": "@handle" }`) creating a `Friendship` row with `status = "pending"`. Idempotent: re-sending a pending request returns `200` rather than creating a duplicate.
+- **`POST /api/v1/social/friends/{friendship_id}/accept`** — Authenticated recipient sets `status = "accepted"`. Returns `403` if called by the requester.
+- **`POST /api/v1/social/friends/{friendship_id}/decline`** — Authenticated recipient deletes the pending `Friendship` row. Returns `403` if called by the requester.
+- **`GET /api/v1/social/friends/requests/incoming`** — Lists all pending requests where `friend_id = current_user.id`.
+- **`GET /api/v1/social/friends/requests/outgoing`** — Lists all pending requests sent by the current user.
+- **Friendship status normalization** — All existing `Friendship` rows without a `status` value were defaulted to `"accepted"` during migration.
+- **Alembic migration `0002_friendship_status_and_pending`** — Added `status` column to `friendships` table with default `"accepted"` and indexed for query performance.
+
+#### Frontend
+
+- **Add Friend modal rebuilt** — New flow: text input for `@username` → search button → user card preview → "Send Request" button.
+- **`useSocial()` hook extended** — Added `searchUser()`, `sendRequest()`, `acceptRequest()`, `declineRequest()`, `incomingRequests`, `outgoingRequests` state.
+- **`socialService.ts` extended** — New methods wiring all six new endpoints.
+- **Pending requests inbox** — New section in Friends screen showing incoming requests with Accept / Decline actions.
+- **Outgoing requests section** — Shows sent requests with pending badge and cancel option.
+- **Friend list unchanged** — Existing confirmed-friend display preserved.
+
+### Key files created / updated
+
+```text
+backend/alembic/versions/0002_friendship_status_and_pending.py  (Created)
+backend/app/api/social.py           (Updated — 6 new endpoints)
+backend/app/schemas/social.py       (Updated — new request/response schemas)
+mobile/src/services/socialService.ts (Updated)
+mobile/src/hooks/useSocial.ts       (Updated)
+mobile/src/app/(tabs)/social.tsx    (Updated — new Add Friend + inbox UI)
+```
+
+---
+
+## Session 13 — Personalized Onboarding, Structured User Context & AI Coach Integration
+
+### What was built
+
+Full onboarding pipeline feeding structured per-user context into the AI Coach system, removing all generic AI responses.
+
+#### Onboarding Flow (5-Step Mobile)
+
+- **Step 1 — Welcome:** Brand splash with product value proposition.
+- **Step 2 — Goal:** Single primary goal selection (`study_consistently`, `build_exercise_habit`, `improve_focus`, `reduce_procrastination`, `custom`).
+- **Step 3 — Role:** Self-description (`student`, `professional`, `freelancer`, `other`) for contextualization.
+- **Step 4 — Focus Challenges:** Multi-select from common friction types (`starting_tasks`, `staying_focused`, `phone_distraction`, `procrastination`, `time_management`).
+- **Step 5 — Schedule:** Preferred active hours (`morning`, `afternoon`, `evening`, `night`) and typical day structure.
+- **Completion:** Calls `POST /api/v1/onboarding` — saves context, marks user as onboarded, redirects to main app.
+
+#### Backend: `UserContext` Model & API
+
+- **`UserContext` SQLAlchemy model** (`backend/app/models/user_context.py`):
+  - `user_id` (FK to `users`), `goal`, `role`, `focus_challenges` (JSON array), `preferred_schedule` (JSON object), `onboarding_completed` (bool), `created_at`, `updated_at`.
+- **`POST /api/v1/onboarding`** — Creates or updates `UserContext` for the authenticated user.
+- **`GET /api/v1/onboarding/status`** — Returns whether the user has completed onboarding and their current context.
+- **Alembic migration `0003` (pre-lifecycle)** — Added `user_context` table.
+
+#### AI Coach Context Integration
+
+- **`AIContextBuilder` updated** — Now loads `UserContext` before building context for any chat request:
+  - Injects `goal`, `role`, `focus_challenges`, and `preferred_schedule` into the system prompt.
+  - AI Coach references the user's goal and challenges in every response rather than providing generic advice.
+- **System prompt updated** — Added persona-aware coaching instructions: the AI references the user's stated challenges and goal explicitly.
+- **`data_quality` gating** — If onboarding is incomplete, AI Coach prompts the user to finish onboarding before providing personalized advice.
+
+#### Frontend Integration
+
+- **`OnboardingScreen` (5 screens)** — Created at `mobile/src/app/onboarding/`.
+- **`onboardingService.ts`** — `submitOnboarding()`, `getOnboardingStatus()`.
+- **Auth flow updated** — After successful registration, checks `GET /api/v1/onboarding/status`; redirects to onboarding if incomplete, else to main app.
+- **`useOnboarding()` hook** — Manages onboarding state, submission, and navigation.
+
+### Key files created / updated
+
+```text
+backend/app/models/user_context.py          (Created)
+backend/app/schemas/user_context.py         (Created)
+backend/app/api/onboarding.py               (Created)
+backend/app/ai/context_builder.py           (Updated — UserContext injection)
+backend/app/ai/prompts.py                   (Updated — persona-aware prompts)
+backend/alembic/versions/0003_user_context.py (Created)
+mobile/src/app/onboarding/                  (Created — 5-screen flow)
+mobile/src/services/onboardingService.ts    (Created)
+mobile/src/hooks/useOnboarding.ts           (Created)
+```
+
+---
+
+## Session 14 — Task Lifecycle: One-Time vs Daily Recurring Tasks & Idempotent Check-ins
+
+### What was built
+
+Corrected the fundamental task/check-in data model to properly represent task recurrence and per-day occurrences, eliminating the conceptual mismatch between one-time tasks and daily habits.
+
+#### Core Conceptual Change
+
+Previously the system had no distinction between tasks that should happen once and tasks that repeat daily. This caused:
+- One-time tasks reappearing after completion.
+- Duplicate check-in rows when the same status was re-submitted.
+- Today screen unable to correctly determine a task's status for the current day.
+
+#### Backend Changes
+
+- **`Task.frequency` normalized** — Values are now strictly `'once'` or `'daily'`. All existing rows with legacy values (`'one_time'`, `'One Time'`, etc.) were normalized via Alembic data migration.
+- **`TaskCheckin` `UniqueConstraint`** — Added `UniqueConstraint('task_id', 'date', name='uq_task_checkin_date')` enforced at both the database level (Postgres/SQLite) and the SQLAlchemy model level. Historical duplicate rows were deduplicated before the constraint was applied.
+- **`POST /api/v1/checkins` — Idempotent upsert:**
+  - If a check-in for `(task_id, date)` does not exist → creates new row (HTTP 201).
+  - If a check-in for `(task_id, date)` already exists → updates `status`, `duration_minutes`, `completed_at` in-place (HTTP 200).
+  - No duplicate rows are ever created; retrying the same status is safe.
+- **`GET /api/v1/tasks` — Occurrence-aware response enrichment:**
+  - Each task object now includes `today_status`: the check-in status for today (`'done'` / `'partial'` / `'missed'` / `null` if not yet checked in).
+  - One-time tasks with `status = 'done'` on a **prior** date are excluded from the active task list (they are complete; no future occurrence expected).
+  - One-time tasks with `status = 'done'` on **today** are included with `today_status = 'done'`.
+  - Daily tasks always appear; their `today_status` reflects today's check-in.
+- **Alembic migration `0003_task_lifecycle_and_checkin_unique`** — Applied in order:
+  1. Added `UniqueConstraint` to `task_checkins`.
+  2. Deduplicated existing check-in rows (keeping the most recent per `(task_id, date)`).
+  3. Normalized `Task.frequency` values to `'once'` / `'daily'`.
+- **Tests — `backend/tests/test_task_lifecycle.py`** — New lifecycle-specific test file:
+  - One-time task completed on prior date excluded from active list.
+  - One-time task completed today still included.
+  - Daily task always included regardless of past check-ins.
+  - Duplicate check-in returns 200 and updates in-place (no new row).
+  - `today_status` reflects correct value per scenario.
+  - All backend tests passing.
+
+#### Frontend Changes
+
+- **`TaskFrequency` TypeScript type** — Added to `mobile/src/types/tasks.ts`:
+  ```typescript
+  export type TaskFrequency = 'once' | 'daily';
+  ```
+- **Task card rendering updated** — `mobile/src/app/(tabs)/index.tsx`:
+  - Action buttons (Done / Partial / Missed) are only rendered if `today_status` is `null`.
+  - If `today_status === 'done'`: renders `✓ Completed` badge.
+  - If `today_status === 'partial'`: renders `◐ Partial` badge.
+  - If `today_status === 'missed'`: renders `× Missed` badge.
+  - This eliminates ghost re-submission UX.
+- **New Task modal updated** — Frequency selector added: `'Once'` / `'Every day'` toggle replaces the former free-text field. Defaults to `'daily'`.
+- **`useTasks` hook hardened** — Added in-flight request locking: a second tap on a check-in button while the first request is in-flight is silently dropped. State is resynchronized from the server response after each successful check-in.
+- **TypeScript compilation verified** — `npx tsc --noEmit` passes with zero errors.
+- **Expo export verified** — `npx expo export --platform web` completes successfully (build integrity check).
+
+### Key files created / updated
+
+```text
+backend/alembic/versions/0003_task_lifecycle_and_checkin_unique.py  (Created)
+backend/app/models/checkin.py          (Updated — UniqueConstraint added)
+backend/app/schemas/task.py            (Updated — frequency validation)
+backend/app/schemas/checkin.py         (Updated — date format validation)
+backend/app/api/checkins.py            (Updated — idempotent upsert logic)
+backend/app/api/tasks.py               (Updated — today_status enrichment)
+backend/tests/test_task_lifecycle.py   (Created — lifecycle-specific tests)
+mobile/src/types/tasks.ts              (Updated — TaskFrequency type)
+mobile/src/hooks/useTasks.ts           (Updated — in-flight locking, state sync)
+mobile/src/app/(tabs)/index.tsx        (Updated — occurrence-aware UI)
+```
+
+---
+
+### Milestone: Behavioral Data Integrity, Metric Correlation & No-Data Semantics
+
+To establish a truthful closed-loop behavioral system (Goal → Task → Collect Evidence → Measure → Understand Pattern → AI Explanation → Personalized Experiment → Measure Result → Learn → Next Action), the metric pipeline and UI data flows were audited and corrected:
+
+#### 1. Metric Scale Integrity & Unit Separation
+- **`completion_rate`**: Standardized strictly as a **0.0 – 1.0 ratio** (rendered via `formatRatioToPercent(val)` → e.g. `0.75` → `75%`).
+- **`consistency`, `improvement_score`, `experiment_effectiveness`, `behavior_score`**: Standardized strictly as **0.0 – 100.0 scores** (rendered via `formatScore(val)` / `formatScorePercent(val)` → e.g. `50.0` → `50%`, eliminating historical `5000%` and `7500%` bugs caused by rogue `* 100` multipliers in mobile views).
+
+#### 2. Truthful "No Data" vs "Zero" Semantics
+- `average_start_delay_minutes` in schemas and calculation engines is now `Optional[float] = None`.
+- If no start delays were recorded/observed, it returns `None` (rendered in UI as `"—"` and `"• No delay logged today"`).
+- If the user explicitly started on time with zero delay, it returns `0.0` (rendered in UI as `"0 mins"` and `"• On time today"`).
+- `compute_behavior_score` safely handles `None` start delay using a neutral 70.0 promptness factor without skewing the composite behavior score.
+
+#### 3. Date Scoping & Isolated Daily Summaries
+- `GET /api/v1/behavior/summary?date=YYYY-MM-DD` now strictly isolates statistics to the requested date (occurrences, delays, and distraction events).
+- Omitting `date` preserves lifetime aggregate calculation.
+- Today tab specifically requests `date=getLocalDateString()` (local calendar `YYYY-MM-DD`), preventing UTC date-boundary shifts and cross-day leakage.
+
+#### 4. Evidence-Backed Progress Curve
+- `compute_behavior_progress_curve` strictly returns evidence-backed data points.
+- New users with 0 check-ins receive `[]` (empty list), allowing the UI to render an honest "Need at least 2 days of check-ins to plot your curve" empty state instead of a fabricated 14-day flat line at 50.0 with `trend='stable'`.
+- The first real evidence point is labeled `trend='initial'`. Trends (`improving`, `setback`, `recovery`, `stable`) only calculate between consecutive days with actual recorded evidence.
+
+#### 5. Real-Time Cross-Tab State Synchronization
+- Replaced decoupled stale React hook state with React Native `DeviceEventEmitter` broadcasting `focusloop:checkin_recorded`.
+- When any check-in completes in `useTasks`, `useBehavior` and `useProfile` instantly re-fetch today's summary, behavior metrics, and progress curve without requiring a manual pull-to-refresh.
+
+### Key files created / updated for Data Integrity
+
+```text
+backend/app/schemas/behavior.py             (Updated — average_start_delay_minutes Optional[float], date param)
+backend/app/behavior/metrics.py             (Updated — date-scoped filters, truthful start delay, evidence-backed curve)
+backend/app/api/behavior.py                 (Updated — date query parameter on /summary)
+backend/tests/test_data_integrity_and_metrics.py (Created — 5 new regression tests verifying metric isolation & contract)
+mobile/src/utils/formatters.ts              (Created — getLocalDateString, formatRatioToPercent, formatScorePercent)
+mobile/src/types/behavior.ts                (Updated — scale annotations, nullable delay, initial trend)
+mobile/src/types/profile.ts                 (Updated — scale annotations, nullable delay)
+mobile/src/services/behavior.ts             (Updated — date query forwarding)
+mobile/src/hooks/useBehavior.ts             (Updated — date param, DeviceEventEmitter auto-refresh)
+mobile/src/hooks/useProfile.ts              (Updated — DeviceEventEmitter auto-refresh)
+mobile/src/hooks/useTasks.ts                (Updated — emit focusloop:checkin_recorded, getLocalDateString)
+mobile/src/app/(tabs)/index.tsx             (Updated — date-scoped summary, removed length fallback, null delay handling)
+mobile/src/app/(tabs)/insights.tsx          (Updated — removed *100 scale bugs, initial trend badge)
+mobile/src/app/profile.tsx                  (Updated — removed *100 scale bugs on consistency & experiments)
+```
+
+---
+
+## Session 15 — Phase 1: Time-Bounded Experiment Metrics & Trustworthy Evaluation
+
+### What was built
+
+Corrected the fundamental flaw in experiment evaluation: the system was using **lifetime behavioral metrics** to evaluate short-duration experiments, allowing months of prior history to dilute the measured result, making experiment conclusions unreliable.
+
+#### Core Problem Fixed
+
+Before this change, `ExperimentEvaluator.evaluate_experiment()` called the global `compute_completion_rate()` and `compute_average_start_delay()` with no date boundaries. A 3-day experiment could be measured against 90 days of accumulated data, producing a baseline and result that were mathematically meaningless for the specific intervention window.
+
+#### Time-Bounded Measurement Architecture
+
+The evaluation logic was fully replaced with a two-window, non-overlapping measurement model:
+
+```text
+Baseline Window:   [start_date − 7 days,  start_date − 1 day]
+Experiment Window: [start_date,            end_date           ]
+```
+
+- **`DEFAULT_EXPERIMENT_BASELINE_DAYS = 7`** — Fixed 7-day pre-experiment window. The baseline captures behavioral state immediately before the intervention, never overlapping the intervention period.
+- **`MIN_EXPERIMENT_OBSERVATIONS = 3`** — Minimum check-in observations required in *both* windows to declare a conclusion. If either window has fewer than 3 observations, result is `"inconclusive"` with an explicit reason string in `result_summary`.
+
+#### New Backend Methods (`backend/app/behavior/metrics.py`)
+
+Two new time-scoped calculation methods were added to `BehaviorMetricsCalculator`:
+
+- **`compute_start_delay_stats(start_date, end_date)`** — Returns `average_start_delay_minutes` and `sample_size` strictly bounded to `[start_date, end_date]`. Returns `None` for delay if zero check-ins have a recorded delay (semantically distinct from `0.0`).
+- **`compute_task_completion_stats(start_date, end_date)`** — Returns `completion_rate` (0.0–1.0 ratio) and `sample_size` strictly bounded to `[start_date, end_date]`.
+
+#### Inconclusive vs. Conclusive Semantics
+
+| Condition | `conclusion` | `before_value` / `after_value` |
+|:---|:---:|:---:|
+| Either window < 3 observations | `"inconclusive"` | Preserved as-is (may be `None`) |
+| No check-ins in experiment window | `"inconclusive"` | `after_value = None` |
+| Zero baseline (division undefined) | Directional result | `percent_change = None` |
+| ≥ 3 observations on both sides | `"positive"` / `"neutral"` / `"negative"` | Calculated values |
+
+The `result_summary` string always includes a disclaimer: *"does not prove causality"*.
+
+#### Experiment Lifecycle Enforcement
+
+`ExperimentEvaluator.evaluate_experiment()` now enforces a hard lifecycle gate:
+- Only experiments with `status == "active"` can be evaluated.
+- `status == "suggested"` or `status == "completed"` returns `None` and the API layer raises `HTTP 400` with a clear reason.
+- After successful evaluation, `exp.status` is set to `"completed"` atomically with the `ExperimentResult` commit.
+- `BehaviorProfileManager.refresh_profile()` is called post-commit to incorporate the learned experiment outcome into the user's profile.
+
+#### API Experiment Lifecycle (`PATCH /api/v1/experiments/{id}`)
+
+New `PATCH` endpoint added to expose status transitions to the frontend:
+- Accepts `{ "status": "active" | "dismissed" }` for the `suggested → active` and `suggested → dismissed` transitions.
+- Ownership-enforced: only the experiment owner can update.
+- Frontend uses this to implement the "Start Protocol" flow: `suggested` → user taps Start → `PATCH` sets `status = "active"` → experiment is live.
+
+#### `ExperimentResponse` Schema (`backend/app/schemas/experiment.py`)
+
+Schema aligned with what the frontend actually needs:
+- `intervention_type`: `str` — Type of intervention (e.g., `"initiation_barrier"`, `"circadian_shift"`).
+- `target_value`: `Optional[float]` — Numeric improvement target.
+- `baseline_value`: `Optional[float]` — Baseline at experiment creation time.
+- `target_metric`: `str` — Metric name (`"average_start_delay_minutes"` or `"completion_rate"`).
+- `results`: `List[ExperimentResultResponse]` — Nested evaluation results (eager-loaded).
+- `status`: `str` — Required, always present: `"suggested"` / `"active"` / `"completed"` / `"dismissed"`.
+
+#### `ExperimentResultResponse` Schema
+
+New schema with full evaluation output:
+- `before_value`, `after_value`, `change_value` — Numeric windows comparison.
+- `percent_change` — Optional (None when baseline is zero).
+- `conclusion` — `"positive"` / `"neutral"` / `"negative"` / `"inconclusive"`.
+- `result_summary` — Human-readable explanation string.
+
+#### Automated Tests (`backend/tests/test_time_bounded_experiment_evaluation.py`)
+
+11 regression tests added covering:
+
+1. Pre-experiment baseline only (excludes experiment period data).
+2. Experiment window only (excludes pre-experiment and post-experiment data).
+3. No data during experiment window → `after_value = None`, `conclusion = "inconclusive"`.
+4. Zero actual delay (`0.0` average) vs. no data (`None`) — semantically distinct.
+5. Old historical data does not dilute result.
+6. Boundary precision: `start − 7`, `start − 1`, `start`, `end`, `end + 1`.
+7. Insufficient sample size (< `MIN_EXPERIMENT_OBSERVATIONS`) → `"inconclusive"`.
+8. Directionality: lower is better (start delay metric).
+9. Directionality: higher is better (completion rate metric).
+10. Zero baseline safety: no division-by-zero, no NaN.
+11. Status gate: `suggested` and `completed` experiments cannot be evaluated.
+
+### Key files created / updated
+
+```text
+backend/app/experiments/evaluator.py                   (Rewritten — time-bounded, status-gated)
+backend/app/behavior/metrics.py                        (Updated — compute_start_delay_stats, compute_task_completion_stats)
+backend/app/schemas/experiment.py                      (Updated — ExperimentResponse, ExperimentResultResponse)
+backend/app/api/experiments.py                         (Updated — PATCH status endpoint, lifecycle guard on evaluate)
+backend/tests/test_time_bounded_experiment_evaluation.py (Created — 11 regression tests)
+```
+
+---
+
+## Session 16 — Lab Screen Crash Fix & Experiment Status Lifecycle
+
+### What was built
+
+Fixed a reproducible `TypeError: Cannot read property 'toUpperCase' of undefined` crash on the Lab Screen (the `lab.tsx` tab, styled as the experiment management interface).
+
+#### Root Cause
+
+The crash occurred at:
+
+```tsx
+// BEFORE (crashing):
+`Status: ${activeExperiment.status.toUpperCase()}`
+```
+
+The `status` field was not present on every `ExperimentResponse` returned by the backend. The backend schema had `status` as an optional field and older database rows (created before the lifecycle migration) did not have a `status` value populated. When `activeExperiment.status` was `undefined`, calling `.toUpperCase()` on it threw a `TypeError` and crashed the React Native render cycle.
+
+The secondary contributing factor was that the `/suggest` endpoint returned a list, but the frontend `suggestExperiment()` function was mismatching the response type — the `useExperiments` hook was appending the returned array as a nested element rather than merging the new items, causing index-based lookups to produce unexpected objects.
+
+#### Fixes Applied
+
+**Backend — Schema Enforcement:**
+- `status` field on `ExperimentResponse` marked as `str` (non-optional) with a default value of `"suggested"`. The SQLAlchemy model already had `default="suggested"` on the column; the schema now enforces this at the API boundary so `null` can never reach the frontend.
+
+**Frontend — Null-safe status render (`mobile/src/app/(tabs)/lab.tsx`):**
+- Status display uses a nullish fallback: `(activeExperiment.status || 'active').toUpperCase()`.
+- Status pill in the experiment card list uses: `(exp.status || 'unknown').toUpperCase()`.
+- This prevents any future `undefined`/`null` status value from crashing the render cycle.
+
+**Frontend — `suggestExperiment()` return type fix (`mobile/src/hooks/useExperiments.ts`):**
+- The hook now correctly handles the `POST /suggest` returning `ExperimentResponse[]`.
+- After suggest, `refreshExperiments()` is called to re-fetch the full list rather than attempting to merge a partial response — this ensures the list state is always derived from a single authoritative server GET.
+- The `handleSuggest()` callback now shows the most recently created experiment's title in the confirmation alert, or a generic success message if no title is available.
+
+**Frontend — `startExperiment()` fix (`mobile/src/hooks/useExperiments.ts`):**
+- `PATCH /api/v1/experiments/{id}` called with `{ status: "active" }` to transition from `suggested` to `active`.
+- On success, `refreshExperiments()` called to synchronize list state.
+
+**Frontend — TypeScript type alignment (`mobile/src/types/experiments.ts`):**
+- `ExperimentResponse.status` typed as `string` (non-optional).
+- `ExperimentResultResponse` schema defined with all evaluator output fields: `before_value`, `after_value`, `change_value`, `percent_change`, `conclusion`, `result_summary`.
+
+#### Experiment Lifecycle UI
+
+The Lab screen correctly handles all three experiment lifecycle states:
+
+| Experiment `status` | UI State |
+|:---|:---|
+| `"suggested"` | "Start Protocol" button shown in card |
+| `"active"` | Hero banner shows active experiment; "Evaluate Protocol Outcome" button rendered |
+| `"completed"` | Results snippet shown in card with conclusion and change value |
+
+No active experiment → hero banner shows "No Active Experiment" state with "Suggest Behavioral Protocol" button.
+
+### Key files updated
+
+```text
+backend/app/schemas/experiment.py          (Updated — status non-optional, result schema fields)
+mobile/src/app/(tabs)/lab.tsx              (Updated — null-safe status, status-aware UI, evaluation result display)
+mobile/src/hooks/useExperiments.ts         (Updated — suggest/start/evaluate/refresh flow)
+mobile/src/types/experiments.ts            (Updated — ExperimentResponse, ExperimentResultResponse type alignment)
+```
+
+---
+
 ## Current Implementation Status
 
 | Component | Status | Notes |
 |---|---|---|
-| FastAPI Backend | ✅ Complete | 15-table schema, Alembic migrations, SQLite/PostgreSQL |
+| FastAPI Backend | ✅ Complete | Schema, Alembic migrations (×4), SQLite/PostgreSQL |
 | Authentication & Persistent Sessions | ✅ Complete | Argon2id, JWT, SHA-256 refresh tokens, server-side revocation |
 | Behavior Engine (Deterministic) | ✅ Complete | Completion rate, start delay, focus ratio, distraction ranking |
 | Pattern Detection Engine | ✅ Complete | Statistical afternoon/morning/delay patterns with confidence |
 | Behavior Profile & Intelligence | ✅ Complete | Personal full profile + social privacy-filtered profile |
 | Social Profile & Privacy System | ✅ Complete | Dual-profile architecture, independent visibility toggles |
 | Grading & Level Abstraction | ✅ Complete | 5-tier milestone system, multi-dimensional scoring |
-| Friendship Management | ✅ Complete | Add/remove/list friends, friendship-status-gated profiles |
+| Username-Based Friend Requests | ✅ Complete | `@username` search → pending → accept/decline flow |
 | AI Context Builder | ✅ Complete | Intent-based, grounded, provenance-tracked, privacy-scoped |
-| AI Chat & Explain Endpoints | ✅ Complete | Grounded LLM calls with deterministic fallback |
-| Test Suite | ✅ 46/46 Passing | Auth, security, behavior engine, AI context, privacy isolation |
-| React Native Frontend (Audit) | ✅ Complete | All demo data identified and removed |
-| Frontend ↔ Backend Integration | ✅ Complete | All major endpoints connected end-to-end |
+| AI Chat & Explain Endpoints | ✅ Complete | Grounded LLM calls, UserContext-personalized, deterministic fallback |
+| Personalized Onboarding | ✅ Complete | 5-step flow: goal, role, challenges, schedule → `UserContext` |
+| Structured User Context | ✅ Complete | `user_context` table feeding AI Coach personalization |
+| Task Lifecycle (One-Time vs Daily) | ✅ Complete | `frequency: 'once' \| 'daily'`, per-day occurrence model |
+| Task Check-in Idempotency | ✅ Complete | `UniqueConstraint(task_id, date)` + upsert in `POST /checkins` |
+| `today_status` Occurrence Enrichment | ✅ Complete | `GET /tasks` returns current-day check-in status per task |
+| Data Integrity & Metric Correlation | ✅ Complete | Strict scale alignment (0-1 vs 0-100), truthful `null` vs `0.0` start delay, isolated date-scoped summary |
+| Truthful Progress Curve | ✅ Complete | Evidence-backed points only; no fabricated 14-day history for new users |
+| Real-Time Cross-Tab State Sync | ✅ Complete | `DeviceEventEmitter` (`focusloop:checkin_recorded`) auto-syncs Today, Insights, Profile |
+| **Time-Bounded Experiment Evaluation** | ✅ Complete | Pre-experiment baseline window vs. experiment window; `inconclusive` on sparse data; no lifetime dilution |
+| **Experiment Lifecycle Enforcement** | ✅ Complete | `suggested → active → completed`; only `active` experiments can be evaluated |
+| **Experiment Generator** | ✅ Complete | Pattern-driven suggestions (5-Minute Gateway, Morning Focus Alignment); idempotent (no duplicate titles) |
+| **Lab Screen (Experiment UI)** | ✅ Complete | Crash fixed; status-aware hero banner, Start/Evaluate/Results display |
+| **`ExperimentResultResponse` Schema** | ✅ Complete | `before_value`, `after_value`, `change_value`, `percent_change`, `conclusion`, `result_summary` |
+| Android Connectivity Fix | ✅ Complete | `EXPO_PUBLIC_API_URL` via `.env`; physical device verified |
+| React Native Frontend | ✅ Complete | All major endpoints integrated; occurrence-aware UI; Lab screen stable |
 | My Profile Screen | ✅ Complete | Owner profile, privacy controls, correct logout location |
 | Check-in History UI | ✅ Complete | `GET /api/v1/checkins` connected to Today screen |
 | Procrastination Event History UI | ✅ Complete | `GET /api/v1/procrastination` connected to Delay Log screen |
 | Privacy Audit | ✅ Verified | Backend correctly withholds private values; `null` wire format noted |
+| **Test Suite** | ✅ Passing | **94 automated backend tests passing** + TypeScript 0 errors |
 
 ---
 
